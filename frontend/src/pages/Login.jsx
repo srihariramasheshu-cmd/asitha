@@ -16,7 +16,7 @@ export default function Login() {
 
   // Redirect if already logged in
   if (user && !authLoading) {
-    return <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} replace />;
+    return <Navigate to={["admin", "super_admin"].includes(user.role) ? "/admin" : "/dashboard"} replace />;
   }
 
   const handleSubmit = async (e) => {
