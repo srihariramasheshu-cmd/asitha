@@ -155,10 +155,20 @@ class TaskBase(BaseModel):
     send_date: str
     send_time: str
 
+class TaskCreate(BaseModel):
+    """For manual task creation by super admin"""
+    prospect_id: Optional[str] = None
+    seat_id: str
+    project_id: str
+    step_number: int = Field(ge=1, le=4)
+    send_date: str
+    send_time: str
+    description: Optional[str] = ""
+
 class TaskResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
-    prospect_id: str
+    prospect_id: Optional[str] = None
     seat_id: str
     project_id: str
     step_number: int
@@ -166,6 +176,7 @@ class TaskResponse(BaseModel):
     send_time: str
     status: str
     sent_timestamp: Optional[str] = None
+    description: Optional[str] = ""
     created_at: str
 
 class TaskUpdate(BaseModel):
