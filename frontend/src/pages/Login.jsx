@@ -28,7 +28,7 @@ export default function Login() {
       toast.success("Welcome back!", {
         description: `Logged in as ${loggedUser.name}`,
       });
-      navigate(loggedUser.role === "admin" ? "/admin" : "/dashboard");
+      navigate(["admin", "super_admin"].includes(loggedUser.role) ? "/admin" : "/dashboard");
     } catch (error) {
       toast.error("Login failed", {
         description: error.response?.data?.detail || "Invalid credentials",
