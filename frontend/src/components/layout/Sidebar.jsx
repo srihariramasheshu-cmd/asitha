@@ -9,7 +9,10 @@ import {
   Upload,
   Download,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  UserCog,
+  Activity,
+  Crown
 } from "lucide-react";
 
 export const Sidebar = () => {
@@ -21,10 +24,12 @@ export const Sidebar = () => {
 
   const adminNavItems = [
     { path: "/admin", icon: LayoutDashboard, label: "Control Tower" },
+    { path: "/admin/users", icon: UserCog, label: "Users & Approvals" },
     { path: "/projects", icon: FolderKanban, label: "Projects" },
     { path: "/admin/seats", icon: Users, label: "Seats" },
     { path: "/prospects", icon: Target, label: "Prospects" },
     { path: "/tasks", icon: CalendarClock, label: "All Tasks" },
+    { path: "/admin/activity-logs", icon: Activity, label: "Activity Logs" },
     { path: "/admin/schedule", icon: Upload, label: "Schedule Upload" },
     { path: "/admin/export", icon: Download, label: "Export Data" },
   ];
@@ -36,7 +41,7 @@ export const Sidebar = () => {
     { path: "/tasks", icon: CalendarClock, label: "My Tasks" },
   ];
 
-  const navItems = user?.role === "admin" ? adminNavItems : seatNavItems;
+  const navItems = ["admin", "super_admin"].includes(user?.role) ? adminNavItems : seatNavItems;
 
   const handleLogout = () => {
     logout();
@@ -50,8 +55,9 @@ export const Sidebar = () => {
         <h1 className="font-chivo font-black text-xl tracking-tight text-white uppercase">
           ABM Blinder
         </h1>
-        <p className="font-mono text-[10px] text-zinc-500 mt-1 uppercase tracking-widest">
-          {user?.role === "admin" ? "Control Tower" : "Seat Console"}
+        <p className="font-mono text-[10px] text-zinc-500 mt-1 uppercase tracking-widest flex items-center gap-1">
+          {user?.role === "super_admin" && <Crown size={10} className="text-purple-400" />}
+          {user?.role === "super_admin" ? "Super Admin" : user?.role === "admin" ? "Admin" : "Seat Console"}
         </p>
       </div>
 
