@@ -883,7 +883,7 @@ async def list_tasks(
 async def get_today_tasks(user: dict = Depends(get_current_user)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     query = {"send_date": today}
-    if user["role"] != "admin":
+    if user["role"] not in ["admin", "super_admin"]:
         query["seat_id"] = user["id"]
     
     tasks = await db.tasks.find(query, {"_id": 0}).sort("send_time", 1).to_list(1000)
@@ -895,7 +895,7 @@ async def update_task(task_id: str, req: TaskUpdate, user: dict = Depends(get_cu
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if user["role"] != "admin" and task["seat_id"] != user["id"]:
+    if user["role"] not in ["admin", "super_admin"] and task["seat_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     update_data = {}
