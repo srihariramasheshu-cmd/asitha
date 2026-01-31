@@ -12,7 +12,8 @@ import {
   ChevronRight,
   UserCog,
   Activity,
-  Crown
+  Crown,
+  ListTodo
 } from "lucide-react";
 
 export const Sidebar = () => {
@@ -28,6 +29,7 @@ export const Sidebar = () => {
     { path: "/projects", icon: FolderKanban, label: "Projects" },
     { path: "/admin/seats", icon: Users, label: "Seats" },
     { path: "/prospects", icon: Target, label: "Prospects" },
+    { path: "/admin/task-management", icon: ListTodo, label: "Task Management" },
     { path: "/tasks", icon: CalendarClock, label: "All Tasks" },
     { path: "/admin/activity-logs", icon: Activity, label: "Activity Logs" },
     { path: "/admin/schedule", icon: Upload, label: "Schedule Upload" },
