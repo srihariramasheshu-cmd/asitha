@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
 import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
 import AdminDashboard from "@/pages/AdminDashboard";
 import SeatDashboard from "@/pages/SeatDashboard";
 import ProjectsPage from "@/pages/ProjectsPage";
@@ -11,6 +12,8 @@ import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import ProspectsPage from "@/pages/ProspectsPage";
 import ProspectDetailPage from "@/pages/ProspectDetailPage";
 import SeatsPage from "@/pages/SeatsPage";
+import UsersManagementPage from "@/pages/UsersManagementPage";
+import ActivityLogsPage from "@/pages/ActivityLogsPage";
 import TasksPage from "@/pages/TasksPage";
 import ScheduleUploadPage from "@/pages/ScheduleUploadPage";
 import ExportPage from "@/pages/ExportPage";
@@ -98,7 +101,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (adminOnly && user.role !== "admin") {
+  if (adminOnly && !["admin", "super_admin"].includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -120,13 +123,14 @@ const RootRedirect = () => {
     return <Navigate to="/login" replace />;
   }
   
-  return user.role === "admin" ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />;
+  return ["admin", "super_admin"].includes(user.role) ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />;
 };
 
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       
       {/* Admin Routes */}
       <Route path="/admin" element={
@@ -137,6 +141,16 @@ function AppRoutes() {
       <Route path="/admin/seats" element={
         <ProtectedRoute adminOnly>
           <SeatsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/users" element={
+        <ProtectedRoute adminOnly>
+          <UsersManagementPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/activity-logs" element={
+        <ProtectedRoute adminOnly>
+          <ActivityLogsPage />
         </ProtectedRoute>
       } />
       <Route path="/admin/schedule" element={
