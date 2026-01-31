@@ -816,16 +816,22 @@ async def upload_schedule(admin: dict = Depends(require_admin), file: UploadFile
 async def list_tasks(
     date: Optional[str] = None,
     status: Optional[str] = None,
+    seat_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     user: dict = Depends(get_current_user)
 ):
     query = {}
-    if user["role"] != "admin":
+    if user["role"] not in ["admin", "super_admin"]:
         query["seat_id"] = user["id"]
+    elif seat_id:
+        query["seat_id"] = seat_id
     
     if date:
         query["send_date"] = date
     if status:
         query["status"] = status
+    if project_id:
+        query["project_id"] = project_id
     
     tasks = await db.tasks.find(query, {"_id": 0}).sort([("send_date", 1), ("send_time", 1)]).to_list(10000)
     return [TaskResponse(**t) for t in tasks]
