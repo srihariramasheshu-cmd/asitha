@@ -14,6 +14,7 @@ import ProspectDetailPage from "@/pages/ProspectDetailPage";
 import SeatsPage from "@/pages/SeatsPage";
 import UsersManagementPage from "@/pages/UsersManagementPage";
 import ActivityLogsPage from "@/pages/ActivityLogsPage";
+import TaskManagementPage from "@/pages/TaskManagementPage";
 import TasksPage from "@/pages/TasksPage";
 import ScheduleUploadPage from "@/pages/ScheduleUploadPage";
 import ExportPage from "@/pages/ExportPage";
@@ -151,6 +152,11 @@ function AppRoutes() {
       <Route path="/admin/activity-logs" element={
         <ProtectedRoute adminOnly>
           <ActivityLogsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/task-management" element={
+        <ProtectedRoute adminOnly>
+          <TaskManagementPage />
         </ProtectedRoute>
       } />
       <Route path="/admin/schedule" element={
