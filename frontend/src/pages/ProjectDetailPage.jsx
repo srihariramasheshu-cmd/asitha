@@ -305,11 +305,12 @@ export default function ProjectDetailPage() {
                 <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
                   Select Seat
                 </Label>
-                <Select value={selectedSeat} onValueChange={setSelectedSeat}>
+                <Select value={selectedSeat || "none"} onValueChange={(val) => setSelectedSeat(val === "none" ? "" : val)}>
                   <SelectTrigger className="bg-zinc-950 border-zinc-800 rounded-sm">
                     <SelectValue placeholder="Choose a seat..." />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-800">
+                    <SelectItem value="none" disabled>Choose a seat...</SelectItem>
                     {availableSeats.map((seat) => (
                       <SelectItem key={seat.id} value={seat.id}>
                         {seat.name} ({seat.email})

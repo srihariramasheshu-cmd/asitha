@@ -160,12 +160,12 @@ export default function TasksPage() {
           />
         </div>
         
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter || "all"} onValueChange={(val) => setStatusFilter(val === "all" ? "" : val)}>
           <SelectTrigger className="w-[150px] bg-zinc-900 border-zinc-800 rounded-sm">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800">
-            <SelectItem value="">All Status</SelectItem>
+            <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="sent">Sent</SelectItem>
           </SelectContent>

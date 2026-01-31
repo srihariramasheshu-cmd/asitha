@@ -144,12 +144,12 @@ export default function ExportPage() {
               <label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
                 Filter by Project (optional)
               </label>
-              <Select value={selectedProject} onValueChange={setSelectedProject}>
+              <Select value={selectedProject || "all"} onValueChange={(val) => setSelectedProject(val === "all" ? "" : val)}>
                 <SelectTrigger className="bg-zinc-950 border-zinc-800 rounded-sm">
                   <SelectValue placeholder="All Projects" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800">
-                  <SelectItem value="">All Projects</SelectItem>
+                  <SelectItem value="all">All Projects</SelectItem>
                   {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}

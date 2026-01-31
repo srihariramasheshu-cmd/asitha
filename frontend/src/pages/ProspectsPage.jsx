@@ -246,12 +246,12 @@ export default function ProspectsPage() {
           />
         </div>
         
-        <Select value={selectedProject} onValueChange={setSelectedProject}>
+        <Select value={selectedProject || "all"} onValueChange={(val) => setSelectedProject(val === "all" ? "" : val)}>
           <SelectTrigger className="w-[200px] bg-zinc-900 border-zinc-800 rounded-sm">
             <SelectValue placeholder="All Projects" />
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800">
-            <SelectItem value="">All Projects</SelectItem>
+            <SelectItem value="all">All Projects</SelectItem>
             {projects.map((p) => (
               <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
             ))}
@@ -357,11 +357,12 @@ export default function ProspectsPage() {
                 <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
                   Select Project
                 </Label>
-                <Select value={uploadProject} onValueChange={setUploadProject}>
+                <Select value={uploadProject || "none"} onValueChange={(val) => setUploadProject(val === "none" ? "" : val)}>
                   <SelectTrigger className="bg-zinc-950 border-zinc-800 rounded-sm">
                     <SelectValue placeholder="Choose a project..." />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-800">
+                    <SelectItem value="none" disabled>Choose a project...</SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                     ))}
@@ -406,14 +407,14 @@ export default function ProspectsPage() {
                       {field.label}{field.required && <span className="text-red-500">*</span>}
                     </Label>
                     <Select 
-                      value={columnMappings[field.key] || ""} 
-                      onValueChange={(val) => setColumnMappings({ ...columnMappings, [field.key]: val })}
+                      value={columnMappings[field.key] || "skip"} 
+                      onValueChange={(val) => setColumnMappings({ ...columnMappings, [field.key]: val === "skip" ? "" : val })}
                     >
                       <SelectTrigger className="flex-1 bg-zinc-950 border-zinc-800 rounded-sm">
                         <SelectValue placeholder="Select column..." />
                       </SelectTrigger>
                       <SelectContent className="bg-zinc-900 border-zinc-800">
-                        <SelectItem value="">-- Skip --</SelectItem>
+                        <SelectItem value="skip">-- Skip --</SelectItem>
                         {csvHeaders.map((header) => (
                           <SelectItem key={header} value={header}>{header}</SelectItem>
                         ))}
