@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { API } from "@/App";
+import { API, useAuth } from "@/App";
 import MainLayout from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { 
   FolderKanban, 
   Users, 
@@ -14,14 +15,20 @@ import {
   MessageSquare,
   TrendingUp,
   ArrowRight,
-  Clock
+  Clock,
+  UserCheck,
+  Activity,
+  Crown,
+  Shield
 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [recentTasks, setRecentTasks] = useState([]);
+  const [pendingUsers, setPendingUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,12 +37,14 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [statsRes, tasksRes] = await Promise.all([
+      const [statsRes, tasksRes, pendingRes] = await Promise.all([
         axios.get(`${API}/stats/overview`),
-        axios.get(`${API}/tasks?status=pending`)
+        axios.get(`${API}/tasks?status=pending`),
+        axios.get(`${API}/users/pending`)
       ]);
       setStats(statsRes.data);
       setRecentTasks(tasksRes.data.slice(0, 5));
+      setPendingUsers(pendingRes.data.slice(0, 5));
     } catch (error) {
       toast.error("Failed to load dashboard data");
     } finally {
@@ -66,11 +75,11 @@ export default function AdminDashboard() {
       path: "/prospects"
     },
     { 
-      label: "Pending Tasks", 
-      value: stats?.pending_tasks || 0, 
-      icon: CalendarClock, 
+      label: "Pending Approvals", 
+      value: stats?.pending_users || 0, 
+      icon: UserCheck, 
       color: "violet",
-      path: "/tasks"
+      path: "/admin/users"
     },
   ];
 
@@ -161,6 +170,18 @@ export default function AdminDashboard() {
           <h3 className="font-chivo font-bold text-lg text-white mb-4">Quick Actions</h3>
           <div className="space-y-3">
             <Button
+              onClick={() => navigate("/admin/users")}
+              data-testid="quick-manage-users"
+              className={`w-full justify-start rounded-sm h-12 font-manrope ${
+                (stats?.pending_users || 0) > 0 
+                  ? "bg-violet-600 hover:bg-violet-500 text-white btn-glow" 
+                  : "bg-zinc-800 hover:bg-zinc-700 text-white"
+              }`}
+            >
+              <UserCheck size={18} className="mr-3" />
+              Manage Users {(stats?.pending_users || 0) > 0 && `(${stats.pending_users} pending)`}
+            </Button>
+            <Button
               onClick={() => navigate("/projects")}
               data-testid="quick-new-project"
               className="w-full justify-start bg-zinc-800 hover:bg-zinc-700 text-white rounded-sm h-12 font-manrope"
@@ -169,20 +190,12 @@ export default function AdminDashboard() {
               Create New Project
             </Button>
             <Button
-              onClick={() => navigate("/admin/seats")}
-              data-testid="quick-add-seat"
+              onClick={() => navigate("/admin/activity-logs")}
+              data-testid="quick-activity-logs"
               className="w-full justify-start bg-zinc-800 hover:bg-zinc-700 text-white rounded-sm h-12 font-manrope"
             >
-              <Users size={18} className="mr-3" />
-              Add New Seat
-            </Button>
-            <Button
-              onClick={() => navigate("/admin/schedule")}
-              data-testid="quick-upload-schedule"
-              className="w-full justify-start bg-zinc-800 hover:bg-zinc-700 text-white rounded-sm h-12 font-manrope"
-            >
-              <CalendarClock size={18} className="mr-3" />
-              Upload Master Schedule
+              <Activity size={18} className="mr-3" />
+              View Activity Logs
             </Button>
             <Button
               onClick={() => navigate("/admin/export")}
@@ -195,14 +208,14 @@ export default function AdminDashboard() {
           </div>
         </Card>
 
-        {/* Recent Pending Tasks */}
+        {/* Pending Users */}
         <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-chivo font-bold text-lg text-white">Pending Tasks</h3>
+            <h3 className="font-chivo font-bold text-lg text-white">Pending Approvals</h3>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/tasks")}
+              onClick={() => navigate("/admin/users")}
               className="text-zinc-400 hover:text-white"
             >
               View All
@@ -210,33 +223,33 @@ export default function AdminDashboard() {
             </Button>
           </div>
           
-          {recentTasks.length === 0 ? (
+          {pendingUsers.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-zinc-500 font-mono text-sm">
-              No pending tasks
+              No pending approvals
             </div>
           ) : (
             <div className="space-y-2">
-              {recentTasks.map((task) => (
+              {pendingUsers.map((pendingUser) => (
                 <div
-                  key={task.id}
+                  key={pendingUser.id}
                   className="task-card flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-sm bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                      <Clock size={14} className="text-amber-500" />
+                      <UserCheck size={14} className="text-amber-500" />
                     </div>
                     <div>
-                      <p className="font-mono text-xs text-zinc-300 truncate max-w-[200px]">
-                        {task.prospect_id.slice(0, 8)}...
+                      <p className="font-manrope text-sm text-zinc-300">
+                        {pendingUser.name}
                       </p>
                       <p className="font-mono text-[10px] text-zinc-500">
-                        Step {task.step_number} • {task.send_date}
+                        {pendingUser.email}
                       </p>
                     </div>
                   </div>
-                  <span className="font-mono text-xs text-amber-500 bg-amber-500/10 px-2 py-1 rounded-sm">
-                    {task.send_time}
-                  </span>
+                  <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">
+                    Pending
+                  </Badge>
                 </div>
               ))}
             </div>
