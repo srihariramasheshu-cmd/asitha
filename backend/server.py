@@ -812,6 +812,49 @@ async def upload_schedule(admin: dict = Depends(require_admin), file: UploadFile
     
     return {"created": created, "errors": errors}
 
+@api_router.post("/tasks", response_model=TaskResponse)
+async def create_task(req: TaskCreate, admin: dict = Depends(require_admin)):
+    """Super admin/admin can manually create tasks for any seat"""
+    # Verify seat exists
+    seat = await db.users.find_one({"id": req.seat_id, "role": "seat"}, {"_id": 0})
+    if not seat:
+        raise HTTPException(status_code=404, detail="Seat not found")
+    
+    # Verify project exists
+    project = await db.projects.find_one({"id": req.project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # If prospect_id provided, verify it exists
+    if req.prospect_id:
+        prospect = await db.prospects.find_one({"id": req.prospect_id}, {"_id": 0})
+        if not prospect:
+            raise HTTPException(status_code=404, detail="Prospect not found")
+    
+    task_doc = {
+        "id": str(uuid.uuid4()),
+        "prospect_id": req.prospect_id,
+        "seat_id": req.seat_id,
+        "project_id": req.project_id,
+        "step_number": req.step_number,
+        "send_date": req.send_date,
+        "send_time": req.send_time,
+        "status": "pending",
+        "sent_timestamp": None,
+        "description": req.description or "",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.tasks.insert_one(task_doc)
+    return TaskResponse(**task_doc)
+
+@api_router.delete("/tasks/{task_id}")
+async def delete_task(task_id: str, admin: dict = Depends(require_admin)):
+    """Admin can delete tasks"""
+    result = await db.tasks.delete_one({"id": task_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"message": "Task deleted"}
+
 @api_router.get("/tasks", response_model=List[TaskResponse])
 async def list_tasks(
     date: Optional[str] = None,
