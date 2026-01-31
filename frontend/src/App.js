@@ -105,9 +105,25 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
   return children;
 };
 
-function AppRoutes() {
-  const { user } = useAuth();
+const RootRedirect = () => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-zinc-400 font-mono">Loading...</div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return user.role === "admin" ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />;
+};
 
+function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -167,13 +183,7 @@ function AppRoutes() {
       } />
       
       {/* Default redirects */}
-      <Route path="/" element={
-        user ? (
-          user.role === "admin" ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />
-        ) : (
-          <Navigate to="/login" replace />
-        )
-      } />
+      <Route path="/" element={<RootRedirect />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
