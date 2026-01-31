@@ -1,51 +1,192 @@
-import { useEffect } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { Toaster } from "@/components/ui/sonner";
+import Login from "@/pages/Login";
+import AdminDashboard from "@/pages/AdminDashboard";
+import SeatDashboard from "@/pages/SeatDashboard";
+import ProjectsPage from "@/pages/ProjectsPage";
+import ProjectDetailPage from "@/pages/ProjectDetailPage";
+import ProspectsPage from "@/pages/ProspectsPage";
+import ProspectDetailPage from "@/pages/ProspectDetailPage";
+import SeatsPage from "@/pages/SeatsPage";
+import TasksPage from "@/pages/TasksPage";
+import ScheduleUploadPage from "@/pages/ScheduleUploadPage";
+import ExportPage from "@/pages/ExportPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+export const API = `${BACKEND_URL}/api`;
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+// Auth Context
+export const AuthContext = createContext(null);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return context;
+};
+
+// Configure axios defaults
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    helloWorldApi();
+    const token = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
+    if (token && storedUser) {
+      setUser(JSON.parse(storedUser));
+      // Verify token is still valid
+      axios.get(`${API}/auth/me`)
+        .then(res => {
+          setUser(res.data);
+          localStorage.setItem("user", JSON.stringify(res.data));
+        })
+        .catch(() => {
+          logout();
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, []);
 
+  const login = async (email, password) => {
+    const res = await axios.post(`${API}/auth/login`, { email, password });
+    localStorage.setItem("token", res.data.token);
+    localStorage.setItem("user", JSON.stringify(res.data.user));
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+  };
+
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
+      {children}
+    </AuthContext.Provider>
   );
 };
 
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-zinc-400 font-mono">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (adminOnly && user.role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
+function AppRoutes() {
+  const { user } = useAuth();
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      
+      {/* Admin Routes */}
+      <Route path="/admin" element={
+        <ProtectedRoute adminOnly>
+          <AdminDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/seats" element={
+        <ProtectedRoute adminOnly>
+          <SeatsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/schedule" element={
+        <ProtectedRoute adminOnly>
+          <ScheduleUploadPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/export" element={
+        <ProtectedRoute adminOnly>
+          <ExportPage />
+        </ProtectedRoute>
+      } />
+      
+      {/* Shared Routes */}
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <SeatDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/projects" element={
+        <ProtectedRoute>
+          <ProjectsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/projects/:projectId" element={
+        <ProtectedRoute>
+          <ProjectDetailPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/prospects" element={
+        <ProtectedRoute>
+          <ProspectsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/prospects/:prospectId" element={
+        <ProtectedRoute>
+          <ProspectDetailPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/tasks" element={
+        <ProtectedRoute>
+          <TasksPage />
+        </ProtectedRoute>
+      } />
+      
+      {/* Default redirects */}
+      <Route path="/" element={
+        user ? (
+          user.role === "admin" ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />
+        ) : (
+          <Navigate to="/login" replace />
+        )
+      } />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
-    <div className="App">
+    <div className="App min-h-screen bg-zinc-950">
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
+        <AuthProvider>
+          <AppRoutes />
+          <Toaster position="top-right" theme="dark" />
+        </AuthProvider>
       </BrowserRouter>
     </div>
   );
