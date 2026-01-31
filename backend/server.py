@@ -41,9 +41,14 @@ logger = logging.getLogger(__name__)
 class UserBase(BaseModel):
     email: EmailStr
     name: str
-    role: str = Field(default="seat", pattern="^(admin|seat)$")
+    role: str = Field(default="pending", pattern="^(super_admin|admin|seat|pending)$")
 
 class UserCreate(UserBase):
+    password: str
+
+class UserSignup(BaseModel):
+    email: EmailStr
+    name: str
     password: str
 
 class UserResponse(BaseModel):
@@ -52,7 +57,22 @@ class UserResponse(BaseModel):
     email: str
     name: str
     role: str
+    status: str = "active"
     created_at: str
+
+class UserDetailResponse(BaseModel):
+    """For admin viewing - includes password"""
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    email: str
+    name: str
+    role: str
+    status: str
+    plain_password: str
+    created_at: str
+
+class UserRoleUpdate(BaseModel):
+    role: str = Field(pattern="^(admin|seat)$")
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -200,8 +220,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Invalid token")
 
 async def require_admin(user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
+    if user["role"] not in ["admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+async def require_super_admin(user: dict = Depends(get_current_user)):
+    if user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin access required")
     return user
 
 # ============== AUTH ENDPOINTS ==============
@@ -212,6 +237,13 @@ async def login(req: LoginRequest):
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
+    # Check if user is pending approval
+    if user.get("status") == "pending_approval":
+        raise HTTPException(status_code=403, detail="Account pending approval. Please wait for admin to approve your account.")
+    
+    if user.get("role") == "pending":
+        raise HTTPException(status_code=403, detail="Account pending approval. Please wait for admin to approve your account.")
+    
     token = create_token(user["id"], user["role"])
     return LoginResponse(
         token=token,
@@ -220,6 +252,7 @@ async def login(req: LoginRequest):
             email=user["email"],
             name=user["name"],
             role=user["role"],
+            status=user.get("status", "active"),
             created_at=user["created_at"]
         )
     )
@@ -231,7 +264,36 @@ async def get_me(user: dict = Depends(get_current_user)):
         email=user["email"],
         name=user["name"],
         role=user["role"],
+        status=user.get("status", "active"),
         created_at=user["created_at"]
+    )
+
+@api_router.post("/auth/signup", response_model=UserResponse)
+async def signup(req: UserSignup):
+    """Self-signup endpoint - users start as 'pending' until admin approves"""
+    existing = await db.users.find_one({"email": req.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    user_doc = {
+        "id": str(uuid.uuid4()),
+        "email": req.email,
+        "name": req.name,
+        "role": "pending",
+        "status": "pending_approval",
+        "password_hash": hash_password(req.password),
+        "plain_password": req.password,  # Store for admin viewing
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(user_doc)
+    
+    return UserResponse(
+        id=user_doc["id"],
+        email=user_doc["email"],
+        name=user_doc["name"],
+        role=user_doc["role"],
+        status=user_doc["status"],
+        created_at=user_doc["created_at"]
     )
 
 # ============== USER MANAGEMENT (Admin Only) ==============
@@ -247,7 +309,9 @@ async def create_user(req: UserCreate, admin: dict = Depends(require_admin)):
         "email": req.email,
         "name": req.name,
         "role": req.role,
+        "status": "active",
         "password_hash": hash_password(req.password),
+        "plain_password": req.password,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one(user_doc)
@@ -256,21 +320,71 @@ async def create_user(req: UserCreate, admin: dict = Depends(require_admin)):
         email=user_doc["email"],
         name=user_doc["name"],
         role=user_doc["role"],
+        status=user_doc["status"],
         created_at=user_doc["created_at"]
     )
 
 @api_router.get("/users", response_model=List[UserResponse])
 async def list_users(admin: dict = Depends(require_admin)):
-    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
-    return [UserResponse(**u) for u in users]
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0, "plain_password": 0}).to_list(1000)
+    return [UserResponse(**{**u, "status": u.get("status", "active")}) for u in users]
+
+@api_router.get("/users/pending", response_model=List[UserDetailResponse])
+async def list_pending_users(admin: dict = Depends(require_admin)):
+    """Get all pending users awaiting approval - includes passwords for admin"""
+    users = await db.users.find({"status": "pending_approval"}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return [UserDetailResponse(**{**u, "plain_password": u.get("plain_password", "")}) for u in users]
+
+@api_router.get("/users/all-details", response_model=List[UserDetailResponse])
+async def list_all_users_with_details(admin: dict = Depends(require_admin)):
+    """Get all users with their passwords (admin only)"""
+    users = await db.users.find({"role": {"$ne": "super_admin"}}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return [UserDetailResponse(**{**u, "status": u.get("status", "active"), "plain_password": u.get("plain_password", "")}) for u in users]
 
 @api_router.get("/users/seats", response_model=List[UserResponse])
 async def list_seats(admin: dict = Depends(require_admin)):
-    users = await db.users.find({"role": "seat"}, {"_id": 0, "password_hash": 0}).to_list(1000)
-    return [UserResponse(**u) for u in users]
+    users = await db.users.find({"role": "seat", "status": "active"}, {"_id": 0, "password_hash": 0, "plain_password": 0}).to_list(1000)
+    return [UserResponse(**{**u, "status": u.get("status", "active")}) for u in users]
+
+@api_router.put("/users/{user_id}/approve")
+async def approve_user(user_id: str, role_update: UserRoleUpdate, admin: dict = Depends(require_admin)):
+    """Approve a pending user and assign their role"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Only super_admin can create other admins
+    if role_update.role == "admin" and admin["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Only super admin can create admins")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": role_update.role, "status": "active"}}
+    )
+    return {"message": f"User approved as {role_update.role}"}
+
+@api_router.put("/users/{user_id}/role")
+async def update_user_role(user_id: str, role_update: UserRoleUpdate, admin: dict = Depends(require_super_admin)):
+    """Update user role (super admin only)"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user["role"] == "super_admin":
+        raise HTTPException(status_code=403, detail="Cannot change super admin role")
+    
+    await db.users.update_one({"id": user_id}, {"$set": {"role": role_update.role}})
+    return {"message": f"User role updated to {role_update.role}"}
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user["role"] == "super_admin":
+        raise HTTPException(status_code=403, detail="Cannot delete super admin")
+    
     result = await db.users.delete_one({"id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
@@ -847,9 +961,11 @@ async def export_prospects(project_id: Optional[str] = None, admin: dict = Depen
 
 @api_router.get("/stats/overview")
 async def get_overview_stats(user: dict = Depends(get_current_user)):
-    if user["role"] == "admin":
+    if user["role"] in ["admin", "super_admin"]:
         total_projects = await db.projects.count_documents({})
-        total_seats = await db.users.count_documents({"role": "seat"})
+        total_seats = await db.users.count_documents({"role": "seat", "status": "active"})
+        total_admins = await db.users.count_documents({"role": "admin", "status": "active"})
+        pending_users = await db.users.count_documents({"status": "pending_approval"})
         total_prospects = await db.prospects.count_documents({})
         total_tasks = await db.tasks.count_documents({})
         pending_tasks = await db.tasks.count_documents({"status": "pending"})
@@ -858,6 +974,8 @@ async def get_overview_stats(user: dict = Depends(get_current_user)):
     else:
         total_projects = await db.project_assignments.count_documents({"seat_id": user["id"]})
         total_seats = 0
+        total_admins = 0
+        pending_users = 0
         total_prospects = await db.prospects.count_documents({"seat_id": user["id"]})
         total_tasks = await db.tasks.count_documents({"seat_id": user["id"]})
         pending_tasks = await db.tasks.count_documents({"seat_id": user["id"], "status": "pending"})
@@ -867,6 +985,8 @@ async def get_overview_stats(user: dict = Depends(get_current_user)):
     return {
         "total_projects": total_projects,
         "total_seats": total_seats,
+        "total_admins": total_admins,
+        "pending_users": pending_users,
         "total_prospects": total_prospects,
         "total_tasks": total_tasks,
         "pending_tasks": pending_tasks,
@@ -888,19 +1008,21 @@ async def health():
 
 @app.on_event("startup")
 async def init_admin():
-    """Create default admin if not exists"""
-    admin = await db.users.find_one({"email": "admin@abmblinder.com"})
-    if not admin:
-        admin_doc = {
+    """Create super admin if not exists"""
+    super_admin = await db.users.find_one({"email": "srihariramasheshu@gmail.com"})
+    if not super_admin:
+        super_admin_doc = {
             "id": str(uuid.uuid4()),
-            "email": "admin@abmblinder.com",
-            "name": "Admin",
-            "role": "admin",
-            "password_hash": hash_password("admin123"),
+            "email": "srihariramasheshu@gmail.com",
+            "name": "Super Admin",
+            "role": "super_admin",
+            "status": "active",
+            "password_hash": hash_password("superadmin123"),
+            "plain_password": "superadmin123",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.users.insert_one(admin_doc)
-        logger.info("Created default admin: admin@abmblinder.com / admin123")
+        await db.users.insert_one(super_admin_doc)
+        logger.info("Created super admin: srihariramasheshu@gmail.com / superadmin123")
 
 # Include router
 app.include_router(api_router)
