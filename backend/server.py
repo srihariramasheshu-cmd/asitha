@@ -1074,6 +1074,11 @@ async def update_task(task_id: str, req: TaskUpdate, user: dict = Depends(get_cu
         update_data["status"] = req.status
     if req.sent_timestamp:
         update_data["sent_timestamp"] = req.sent_timestamp
+    # Support drag-drop rescheduling
+    if req.send_date:
+        update_data["send_date"] = req.send_date
+    if req.send_time:
+        update_data["send_time"] = req.send_time
     
     if update_data:
         await db.tasks.update_one({"id": task_id}, {"$set": update_data})
