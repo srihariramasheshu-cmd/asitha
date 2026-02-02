@@ -435,6 +435,8 @@ async def create_project(req: ProjectCreate, admin: dict = Depends(require_admin
         "name": req.name,
         "description": req.description or "",
         "domains": req.domains,
+        "gap_days": req.gap_days,
+        "step_labels": req.step_labels,
         "created_by": admin["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -443,13 +445,19 @@ async def create_project(req: ProjectCreate, admin: dict = Depends(require_admin
 
 @api_router.get("/projects", response_model=List[ProjectResponse])
 async def list_projects(user: dict = Depends(get_current_user)):
-    if user["role"] == "admin":
+    if user["role"] in ["admin", "super_admin"]:
         projects = await db.projects.find({}, {"_id": 0}).to_list(1000)
     else:
         # Seat can only see assigned projects
         assignments = await db.project_assignments.find({"seat_id": user["id"]}, {"_id": 0}).to_list(1000)
         project_ids = [a["project_id"] for a in assignments]
         projects = await db.projects.find({"id": {"$in": project_ids}}, {"_id": 0}).to_list(1000)
+    # Add defaults for existing projects
+    for p in projects:
+        if "gap_days" not in p:
+            p["gap_days"] = 3
+        if "step_labels" not in p:
+            p["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
     return [ProjectResponse(**p) for p in projects]
 
 @api_router.get("/projects/{project_id}", response_model=ProjectResponse)
@@ -458,10 +466,16 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    if user["role"] != "admin":
+    if user["role"] not in ["admin", "super_admin"]:
         assignment = await db.project_assignments.find_one({"project_id": project_id, "seat_id": user["id"]})
         if not assignment:
             raise HTTPException(status_code=403, detail="Not assigned to this project")
+    
+    # Add defaults
+    if "gap_days" not in project:
+        project["gap_days"] = 3
+    if "step_labels" not in project:
+        project["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
     
     return ProjectResponse(**project)
 
