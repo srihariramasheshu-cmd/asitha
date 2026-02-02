@@ -483,12 +483,22 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
 async def update_project(project_id: str, req: ProjectCreate, admin: dict = Depends(require_admin)):
     result = await db.projects.update_one(
         {"id": project_id},
-        {"$set": {"name": req.name, "description": req.description, "domains": req.domains}}
+        {"$set": {
+            "name": req.name, 
+            "description": req.description, 
+            "domains": req.domains,
+            "gap_days": req.gap_days,
+            "step_labels": req.step_labels
+        }}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
     
     project = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if "gap_days" not in project:
+        project["gap_days"] = 3
+    if "step_labels" not in project:
+        project["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
     return ProjectResponse(**project)
 
 @api_router.delete("/projects/{project_id}")
