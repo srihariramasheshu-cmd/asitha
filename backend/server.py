@@ -908,6 +908,8 @@ async def list_tasks(
     status: Optional[str] = None,
     seat_id: Optional[str] = None,
     project_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     user: dict = Depends(get_current_user)
 ):
     query = {}
@@ -923,8 +925,130 @@ async def list_tasks(
     if project_id:
         query["project_id"] = project_id
     
+    # Date range for calendar view
+    if start_date and end_date:
+        query["send_date"] = {"$gte": start_date, "$lte": end_date}
+    
     tasks = await db.tasks.find(query, {"_id": 0}).sort([("send_date", 1), ("send_time", 1)]).to_list(10000)
-    return [TaskResponse(**t) for t in tasks]
+    
+    # Enrich tasks with prospect info
+    enriched_tasks = []
+    for t in tasks:
+        if t.get("prospect_id"):
+            prospect = await db.prospects.find_one({"id": t["prospect_id"]}, {"_id": 0})
+            if prospect:
+                t["prospect_name"] = prospect.get("contact_name", "")
+                t["prospect_company"] = prospect.get("company_name", "")
+                t["prospect_email"] = prospect.get("email", "")
+        enriched_tasks.append(TaskResponse(**t))
+    
+    return enriched_tasks
+
+@api_router.get("/tasks/calendar")
+async def get_calendar_tasks(
+    start_date: str,
+    end_date: str,
+    seat_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    """Get tasks formatted for calendar view"""
+    query = {"send_date": {"$gte": start_date, "$lte": end_date}}
+    
+    if user["role"] not in ["admin", "super_admin"]:
+        query["seat_id"] = user["id"]
+    elif seat_id:
+        query["seat_id"] = seat_id
+    
+    if project_id:
+        query["project_id"] = project_id
+    
+    tasks = await db.tasks.find(query, {"_id": 0}).to_list(10000)
+    
+    # Enrich with prospect and project info
+    calendar_events = []
+    for t in tasks:
+        event = {**t}
+        if t.get("prospect_id"):
+            prospect = await db.prospects.find_one({"id": t["prospect_id"]}, {"_id": 0})
+            if prospect:
+                event["prospect_name"] = prospect.get("contact_name", "")
+                event["prospect_company"] = prospect.get("company_name", "")
+                event["prospect_email"] = prospect.get("email", "")
+        
+        # Get project info
+        project = await db.projects.find_one({"id": t["project_id"]}, {"_id": 0})
+        if project:
+            event["project_name"] = project.get("name", "")
+            step_labels = project.get("step_labels", ["Intro", "F/U 1", "F/U 2", "F/U 3", "F/U 4"])
+            event["step_label"] = step_labels[t["step_number"] - 1] if t["step_number"] <= len(step_labels) else f"Step {t['step_number']}"
+        
+        calendar_events.append(event)
+    
+    return calendar_events
+
+@api_router.post("/tasks/lever")
+async def apply_schedule_lever(req: ScheduleLeverRequest, admin: dict = Depends(require_admin)):
+    """The LEVER: Auto-generate 5-step sequences for prospects"""
+    from datetime import timedelta
+    
+    # Get project for gap_days
+    project = await db.projects.find_one({"id": req.project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    gap_days = project.get("gap_days", 3)
+    step_labels = project.get("step_labels", ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"])
+    
+    # Get prospects
+    prospect_query = {"project_id": req.project_id}
+    if req.prospect_ids:
+        prospect_query["id"] = {"$in": req.prospect_ids}
+    
+    prospects = await db.prospects.find(prospect_query, {"_id": 0}).to_list(10000)
+    
+    if not prospects:
+        raise HTTPException(status_code=400, detail="No prospects found for this project")
+    
+    # Parse start date
+    try:
+        start_dt = datetime.strptime(f"{req.start_date} {req.start_time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD and HH:MM")
+    
+    created_count = 0
+    
+    for prospect in prospects:
+        # Delete existing tasks for this prospect (to allow re-scheduling)
+        await db.tasks.delete_many({"prospect_id": prospect["id"]})
+        
+        # Create 5 tasks for each prospect
+        for step in range(1, 6):
+            task_date = start_dt + timedelta(days=(step - 1) * gap_days)
+            
+            task_doc = {
+                "id": str(uuid.uuid4()),
+                "prospect_id": prospect["id"],
+                "seat_id": prospect["seat_id"],
+                "project_id": req.project_id,
+                "step_number": step,
+                "send_date": task_date.strftime("%Y-%m-%d"),
+                "send_time": req.start_time,
+                "status": "pending",
+                "sent_timestamp": None,
+                "description": step_labels[step - 1] if step <= len(step_labels) else f"Step {step}",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.tasks.insert_one(task_doc)
+            created_count += 1
+    
+    return {
+        "message": f"Generated {created_count} tasks for {len(prospects)} prospects",
+        "prospects_count": len(prospects),
+        "tasks_count": created_count,
+        "gap_days": gap_days,
+        "start_date": req.start_date
+    }
 
 @api_router.get("/tasks/today", response_model=List[TaskResponse])
 async def get_today_tasks(user: dict = Depends(get_current_user)):
