@@ -15,6 +15,8 @@ import SeatsPage from "@/pages/SeatsPage";
 import UsersManagementPage from "@/pages/UsersManagementPage";
 import ActivityLogsPage from "@/pages/ActivityLogsPage";
 import TaskManagementPage from "@/pages/TaskManagementPage";
+import CalendarDashboard from "@/pages/CalendarDashboard";
+import ScheduleLever from "@/pages/ScheduleLever";
 import TasksPage from "@/pages/TasksPage";
 import ScheduleUploadPage from "@/pages/ScheduleUploadPage";
 import ExportPage from "@/pages/ExportPage";
@@ -159,6 +161,11 @@ function AppRoutes() {
           <TaskManagementPage />
         </ProtectedRoute>
       } />
+      <Route path="/admin/schedule-lever" element={
+        <ProtectedRoute adminOnly>
+          <ScheduleLever />
+        </ProtectedRoute>
+      } />
       <Route path="/admin/schedule" element={
         <ProtectedRoute adminOnly>
           <ScheduleUploadPage />
@@ -174,6 +181,11 @@ function AppRoutes() {
       <Route path="/dashboard" element={
         <ProtectedRoute>
           <SeatDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/calendar" element={
+        <ProtectedRoute>
+          <CalendarDashboard />
         </ProtectedRoute>
       } />
       <Route path="/projects" element={
