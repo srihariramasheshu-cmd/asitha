@@ -86,6 +86,9 @@ class ProjectBase(BaseModel):
     name: str
     description: Optional[str] = ""
     domains: List[str] = []
+    # Lever settings
+    gap_days: int = Field(default=3, ge=1, le=30)  # Days between follow-ups
+    step_labels: List[str] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
 
 class ProjectCreate(ProjectBase):
     pass
@@ -96,12 +99,21 @@ class ProjectResponse(BaseModel):
     name: str
     description: str
     domains: List[str]
+    gap_days: int
+    step_labels: List[str]
     created_by: str
     created_at: str
 
 class ProjectAssignment(BaseModel):
     project_id: str
     seat_id: str
+
+class ScheduleLeverRequest(BaseModel):
+    """Request to generate 5-step sequence for prospects"""
+    project_id: str
+    start_date: str  # YYYY-MM-DD
+    start_time: str  # HH:MM
+    prospect_ids: Optional[List[str]] = None  # If None, apply to all prospects in project
 
 class ProspectBase(BaseModel):
     company_name: str
