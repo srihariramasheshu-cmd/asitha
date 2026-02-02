@@ -172,10 +172,17 @@ class TaskCreate(BaseModel):
     prospect_id: Optional[str] = None
     seat_id: str
     project_id: str
-    step_number: int = Field(ge=1, le=4)
+    step_number: int = Field(ge=1, le=5)
     send_date: str
     send_time: str
     description: Optional[str] = ""
+
+class TaskUpdate(BaseModel):
+    status: Optional[str] = None
+    sent_timestamp: Optional[str] = None
+    reply_content: Optional[str] = None
+    send_date: Optional[str] = None  # For drag-drop rescheduling
+    send_time: Optional[str] = None
 
 class TaskResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -190,6 +197,10 @@ class TaskResponse(BaseModel):
     sent_timestamp: Optional[str] = None
     description: Optional[str] = ""
     created_at: str
+    # Include prospect info for calendar display
+    prospect_name: Optional[str] = None
+    prospect_company: Optional[str] = None
+    prospect_email: Optional[str] = None
 
 class TaskUpdate(BaseModel):
     status: Optional[str] = None
