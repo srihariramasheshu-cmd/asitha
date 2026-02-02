@@ -13,7 +13,9 @@ import {
   UserCog,
   Activity,
   Crown,
-  ListTodo
+  ListTodo,
+  Zap,
+  Calendar
 } from "lucide-react";
 
 export const Sidebar = () => {
@@ -29,15 +31,17 @@ export const Sidebar = () => {
     { path: "/projects", icon: FolderKanban, label: "Projects" },
     { path: "/admin/seats", icon: Users, label: "Seats" },
     { path: "/prospects", icon: Target, label: "Prospects" },
+    { path: "/admin/schedule-lever", icon: Zap, label: "Schedule Lever" },
     { path: "/admin/task-management", icon: ListTodo, label: "Task Management" },
-    { path: "/tasks", icon: CalendarClock, label: "All Tasks" },
+    { path: "/calendar", icon: Calendar, label: "Calendar View" },
     { path: "/admin/activity-logs", icon: Activity, label: "Activity Logs" },
-    { path: "/admin/schedule", icon: Upload, label: "Schedule Upload" },
+    { path: "/admin/schedule", icon: Upload, label: "CSV Upload" },
     { path: "/admin/export", icon: Download, label: "Export Data" },
   ];
 
   const seatNavItems = [
     { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { path: "/calendar", icon: Calendar, label: "My Calendar" },
     { path: "/projects", icon: FolderKanban, label: "My Projects" },
     { path: "/prospects", icon: Target, label: "My Prospects" },
     { path: "/tasks", icon: CalendarClock, label: "My Tasks" },
