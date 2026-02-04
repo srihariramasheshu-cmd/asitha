@@ -263,19 +263,93 @@ export default function ScheduleLever() {
                 <span>1 day</span>
                 <span>14 days</span>
               </div>
-              {selectedProject && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={updateProjectGap}
-                  className="text-zinc-400 text-xs"
-                >
-                  <Settings size={12} className="mr-1" />
-                  Save as project default
-                </Button>
-              )}
             </div>
           </div>
+        </Card>
+
+        {/* Advanced Scheduling Controls */}
+        <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6 mb-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-sm bg-violet-600/10 border border-violet-600/20 flex items-center justify-center">
+              <Settings size={24} className="text-violet-500" />
+            </div>
+            <div>
+              <h3 className="font-chivo font-bold text-lg text-white">Advanced Scheduling</h3>
+              <p className="font-mono text-xs text-zinc-500">
+                Smart constraints for natural email delivery
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Mails per Domain per Day */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                  Mails per Domain/Day
+                </Label>
+                <span className="font-chivo font-bold text-2xl text-violet-400">
+                  {mailsPerDomainPerDay}
+                </span>
+              </div>
+              <Slider
+                value={[mailsPerDomainPerDay]}
+                onValueChange={(val) => setMailsPerDomainPerDay(val[0])}
+                min={1}
+                max={50}
+                step={1}
+                className="w-full"
+              />
+              <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
+                <span>1 mail</span>
+                <span>50 mails</span>
+              </div>
+              <p className="font-mono text-[10px] text-zinc-600">
+                Limit emails to same domain per day to avoid spam filters
+              </p>
+            </div>
+
+            {/* Jitter */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                  Time Jitter
+                </Label>
+                <span className="font-chivo font-bold text-2xl text-violet-400">
+                  ±{jitterMinutes} min
+                </span>
+              </div>
+              <Slider
+                value={[jitterMinutes]}
+                onValueChange={(val) => setJitterMinutes(val[0])}
+                min={0}
+                max={60}
+                step={5}
+                className="w-full"
+              />
+              <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
+                <span>No jitter</span>
+                <span>±60 min</span>
+              </div>
+              <p className="font-mono text-[10px] text-zinc-600">
+                Randomize send times for more natural delivery
+              </p>
+            </div>
+          </div>
+
+          {selectedProject && (
+            <div className="mt-4 pt-4 border-t border-zinc-800">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={updateProjectSettings}
+                className="text-zinc-400 text-xs"
+              >
+                <Settings size={12} className="mr-1" />
+                Save all settings as project default
+              </Button>
+            </div>
+          )}
         </Card>
 
         {/* Preview */}
