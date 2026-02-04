@@ -90,6 +90,9 @@ class ProjectBase(BaseModel):
     # Lever settings
     gap_days: int = Field(default=3, ge=1, le=30)  # Days between follow-ups
     step_labels: List[str] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
+    # Advanced scheduling constraints
+    mails_per_domain_per_day: int = Field(default=10, ge=1, le=100)  # Limit mails per domain per day
+    jitter_minutes: int = Field(default=0, ge=0, le=120)  # Random jitter in minutes for natural scheduling
 
 class ProjectCreate(ProjectBase):
     pass
@@ -102,6 +105,8 @@ class ProjectResponse(BaseModel):
     domains: List[str]
     gap_days: int
     step_labels: List[str]
+    mails_per_domain_per_day: int = 10
+    jitter_minutes: int = 0
     created_by: str
     created_at: str
 
