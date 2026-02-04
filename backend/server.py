@@ -1300,7 +1300,7 @@ async def list_activity_logs(
         query["project_id"] = project_id
     
     logs = await db.activity_logs.find(query, {"_id": 0}).sort("timestamp", -1).to_list(10000)
-    return [ActivityLogResponse(**l) for l in logs]
+    return [ActivityLogResponse(**log) for log in logs]
 
 # ============== EXPORT ==============
 
