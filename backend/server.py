@@ -641,7 +641,7 @@ async def get_prospect(prospect_id: str, user: dict = Depends(get_current_user))
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     
-    if user["role"] != "admin" and prospect["seat_id"] != user["id"]:
+    if user["role"] not in ["admin", "super_admin"] and prospect["seat_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     return ProspectResponse(**prospect)
@@ -652,7 +652,7 @@ async def update_prospect(prospect_id: str, req: ProspectBase, user: dict = Depe
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     
-    if user["role"] != "admin" and prospect["seat_id"] != user["id"]:
+    if user["role"] not in ["admin", "super_admin"] and prospect["seat_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     update_data = req.model_dump(exclude_unset=True)
@@ -667,7 +667,7 @@ async def update_prospect_status(prospect_id: str, status: str, user: dict = Dep
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     
-    if user["role"] != "admin" and prospect["seat_id"] != user["id"]:
+    if user["role"] not in ["admin", "super_admin"] and prospect["seat_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     await db.prospects.update_one({"id": prospect_id}, {"$set": {"status": status}})
@@ -679,7 +679,7 @@ async def delete_prospect(prospect_id: str, user: dict = Depends(get_current_use
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     
-    if user["role"] != "admin" and prospect["seat_id"] != user["id"]:
+    if user["role"] not in ["admin", "super_admin"] and prospect["seat_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     await db.prospects.delete_one({"id": prospect_id})
@@ -784,7 +784,7 @@ async def create_or_update_outreach_step(req: OutreachStepCreate, user: dict = D
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     
-    if user["role"] != "admin" and prospect["seat_id"] != user["id"]:
+    if user["role"] not in ["admin", "super_admin"] and prospect["seat_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     # Upsert step
@@ -820,7 +820,7 @@ async def get_outreach_steps(prospect_id: str, user: dict = Depends(get_current_
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     
-    if user["role"] != "admin" and prospect["seat_id"] != user["id"]:
+    if user["role"] not in ["admin", "super_admin"] and prospect["seat_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     steps = await db.outreach_steps.find({"prospect_id": prospect_id}, {"_id": 0}).sort("step_number", 1).to_list(4)
@@ -1294,7 +1294,7 @@ async def list_activity_logs(
     user: dict = Depends(get_current_user)
 ):
     query = {}
-    if user["role"] != "admin":
+    if user["role"] not in ["admin", "super_admin"]:
         query["seat_id"] = user["id"]
     if project_id:
         query["project_id"] = project_id
