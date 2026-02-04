@@ -458,6 +458,8 @@ async def create_project(req: ProjectCreate, admin: dict = Depends(require_admin
         "domains": req.domains,
         "gap_days": req.gap_days,
         "step_labels": req.step_labels,
+        "mails_per_domain_per_day": req.mails_per_domain_per_day,
+        "jitter_minutes": req.jitter_minutes,
         "created_by": admin["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
