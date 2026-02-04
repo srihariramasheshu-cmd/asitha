@@ -144,6 +144,49 @@ export default function CalendarDashboard() {
   const handleSelectEvent = (event) => {
     setSelectedTask(event.resource);
     setShowTaskPanel(true);
+    // Fetch notes for the prospect if available
+    if (event.resource.prospect_id) {
+      fetchProspectNotes(event.resource.prospect_id);
+    } else {
+      setNotes([]);
+    }
+  };
+
+  const fetchProspectNotes = async (prospectId) => {
+    setLoadingNotes(true);
+    try {
+      const res = await axios.get(`${API}/notes/prospect/${prospectId}`);
+      setNotes(res.data);
+    } catch (error) {
+      setNotes([]);
+    } finally {
+      setLoadingNotes(false);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !selectedTask?.prospect_id) return;
+    try {
+      await axios.post(`${API}/notes`, {
+        prospect_id: selectedTask.prospect_id,
+        content: newNote.trim()
+      });
+      setNewNote("");
+      fetchProspectNotes(selectedTask.prospect_id);
+      toast.success("Note added!");
+    } catch (error) {
+      toast.error("Failed to add note");
+    }
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    try {
+      await axios.delete(`${API}/notes/${noteId}`);
+      fetchProspectNotes(selectedTask.prospect_id);
+      toast.success("Note deleted");
+    } catch (error) {
+      toast.error("Failed to delete note");
+    }
   };
 
   const handleEventDrop = async ({ event, start }) => {
@@ -163,16 +206,32 @@ export default function CalendarDashboard() {
     }
   };
 
+  const openSentModal = () => {
+    setSentEmailContent("");
+    setShowSentModal(true);
+  };
+
   const handleMarkAsSent = async () => {
     if (!selectedTask) return;
     setMarking(true);
     try {
       await axios.put(`${API}/tasks/${selectedTask.id}`, {
         status: "sent",
-        sent_timestamp: new Date().toISOString()
+        sent_timestamp: new Date().toISOString(),
+        sent_email_content: sentEmailContent || null
       });
       toast.success("Task marked as sent!");
+      setShowSentModal(false);
       setShowTaskPanel(false);
+      setSelectedTask(null);
+      setSentEmailContent("");
+      fetchCalendarTasks();
+    } catch (error) {
+      toast.error("Failed to update task");
+    } finally {
+      setMarking(false);
+    }
+  };
       setSelectedTask(null);
       fetchCalendarTasks();
     } catch (error) {
