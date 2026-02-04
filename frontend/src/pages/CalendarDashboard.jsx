@@ -527,6 +527,80 @@ export default function CalendarDashboard() {
                   </span>
                 </div>
               )}
+
+              {/* Sent Email Content (if available) */}
+              {selectedTask.sent_email_content && (
+                <Card className="bg-zinc-800/30 border border-zinc-700 p-3">
+                  <h4 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">
+                    Sent Email Content
+                  </h4>
+                  <p className="font-mono text-xs text-zinc-300 whitespace-pre-wrap">
+                    {selectedTask.sent_email_content}
+                  </p>
+                </Card>
+              )}
+
+              {/* Notes Section */}
+              {selectedTask.prospect_id && (
+                <Card className="bg-zinc-800/30 border border-zinc-700 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold flex items-center gap-2">
+                      <StickyNote size={12} />
+                      Prospect Notes
+                    </h4>
+                    <span className="font-mono text-xs text-zinc-600">{notes.length} notes</span>
+                  </div>
+                  
+                  {/* Add Note */}
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder="Add a note..."
+                      className="bg-zinc-900 border-zinc-700 text-sm resize-none h-16"
+                      data-testid="new-note-input"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleAddNote}
+                      disabled={!newNote.trim()}
+                      data-testid="add-note-btn"
+                      className="bg-blue-600 hover:bg-blue-500 h-16"
+                    >
+                      <Plus size={16} />
+                    </Button>
+                  </div>
+                  
+                  {/* Notes List */}
+                  <div className="max-h-40 overflow-y-auto space-y-2">
+                    {loadingNotes ? (
+                      <p className="font-mono text-xs text-zinc-500">Loading notes...</p>
+                    ) : notes.length === 0 ? (
+                      <p className="font-mono text-xs text-zinc-500">No notes yet</p>
+                    ) : (
+                      notes.map((note) => (
+                        <div key={note.id} className="bg-zinc-900/50 rounded-sm p-2 border border-zinc-800 group">
+                          <div className="flex items-start justify-between">
+                            <p className="font-mono text-xs text-zinc-300 flex-1">{note.content}</p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteNote(note.id)}
+                              className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                              data-testid={`delete-note-${note.id}`}
+                            >
+                              <Trash2 size={12} />
+                            </Button>
+                          </div>
+                          <p className="font-mono text-[10px] text-zinc-600 mt-1">
+                            {note.user_name} • {new Date(note.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              )}
             </div>
           )}
 
@@ -540,21 +614,70 @@ export default function CalendarDashboard() {
             </Button>
             {selectedTask?.status !== "sent" && (
               <Button
-                onClick={handleMarkAsSent}
+                onClick={openSentModal}
                 disabled={marking}
                 data-testid="mark-sent-btn"
                 className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-sm"
               >
-                {marking ? (
-                  <span>Marking...</span>
-                ) : (
-                  <>
-                    <Send size={16} className="mr-2" />
-                    Mark as Sent
-                  </>
-                )}
+                <Send size={16} className="mr-2" />
+                Mark as Sent
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Content Capture Modal */}
+      <Dialog open={showSentModal} onOpenChange={setShowSentModal}>
+        <DialogContent className="bg-zinc-900 border border-zinc-800 rounded-sm max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-chivo font-bold text-lg text-white flex items-center gap-2">
+              <Send className="text-emerald-500" size={20} />
+              Mark as Sent
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <p className="font-mono text-sm text-zinc-400">
+              Optionally paste the email content you sent for record keeping:
+            </p>
+            
+            <Textarea
+              value={sentEmailContent}
+              onChange={(e) => setSentEmailContent(e.target.value)}
+              placeholder="Paste your sent email content here (optional)..."
+              className="bg-zinc-950 border-zinc-700 min-h-[150px] font-mono text-sm"
+              data-testid="sent-email-content-input"
+            />
+
+            <p className="font-mono text-[10px] text-zinc-600">
+              This content will be stored for reference and activity tracking.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setShowSentModal(false)}
+              className="border-zinc-700 text-zinc-300"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMarkAsSent}
+              disabled={marking}
+              data-testid="confirm-sent-btn"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-sm"
+            >
+              {marking ? (
+                <span>Marking...</span>
+              ) : (
+                <>
+                  <CheckCircle size={16} className="mr-2" />
+                  Confirm Sent
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
