@@ -503,6 +503,10 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
         project["gap_days"] = 3
     if "step_labels" not in project:
         project["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
+    if "mails_per_domain_per_day" not in project:
+        project["mails_per_domain_per_day"] = 10
+    if "jitter_minutes" not in project:
+        project["jitter_minutes"] = 0
     
     return ProjectResponse(**project)
 
@@ -515,7 +519,9 @@ async def update_project(project_id: str, req: ProjectCreate, admin: dict = Depe
             "description": req.description, 
             "domains": req.domains,
             "gap_days": req.gap_days,
-            "step_labels": req.step_labels
+            "step_labels": req.step_labels,
+            "mails_per_domain_per_day": req.mails_per_domain_per_day,
+            "jitter_minutes": req.jitter_minutes
         }}
     )
     if result.matched_count == 0:
@@ -526,6 +532,10 @@ async def update_project(project_id: str, req: ProjectCreate, admin: dict = Depe
         project["gap_days"] = 3
     if "step_labels" not in project:
         project["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
+    if "mails_per_domain_per_day" not in project:
+        project["mails_per_domain_per_day"] = 10
+    if "jitter_minutes" not in project:
+        project["jitter_minutes"] = 0
     return ProjectResponse(**project)
 
 @api_router.delete("/projects/{project_id}")
