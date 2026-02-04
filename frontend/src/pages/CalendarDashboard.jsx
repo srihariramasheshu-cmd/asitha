@@ -232,14 +232,6 @@ export default function CalendarDashboard() {
       setMarking(false);
     }
   };
-      setSelectedTask(null);
-      fetchCalendarTasks();
-    } catch (error) {
-      toast.error("Failed to update task");
-    } finally {
-      setMarking(false);
-    }
-  };
 
   const getEventStyle = (event) => {
     const task = event.resource;
