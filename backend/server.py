@@ -675,25 +675,21 @@ async def parse_csv(file: UploadFile = File(...)):
 @api_router.post("/prospects/upload/import")
 async def import_csv(
     file: UploadFile = File(...),
-    project_id: str = None,
-    mappings: str = None,
+    project_id: str = Form(...),
+    mappings: str = Form(...),
     user: dict = Depends(get_current_user)
 ):
     """Import CSV with column mappings"""
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
     
-    if not project_id or not mappings:
-        raise HTTPException(status_code=400, detail="project_id and mappings are required")
-    
     # Verify project access
-    if user["role"] != "admin":
+    if user["role"] not in ["admin", "super_admin"]:
         assignment = await db.project_assignments.find_one({"project_id": project_id, "seat_id": user["id"]})
         if not assignment:
             raise HTTPException(status_code=403, detail="Not assigned to this project")
     
     # Parse mappings JSON
-    import json
     try:
         column_mappings = json.loads(mappings)
     except json.JSONDecodeError:
