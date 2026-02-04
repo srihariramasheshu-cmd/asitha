@@ -259,7 +259,7 @@ export default function CalendarDashboard() {
     };
   };
 
-  const CustomToolbar = ({ onNavigate, label }) => (
+  const CustomToolbar = useCallback(({ onNavigate, label }) => (
     <div className="flex items-center justify-between mb-4 px-2">
       <div className="flex items-center gap-2">
         <Button
@@ -309,7 +309,7 @@ export default function CalendarDashboard() {
         </Button>
       </div>
     </div>
-  );
+  ), [view]);
 
   return (
     <MainLayout 
