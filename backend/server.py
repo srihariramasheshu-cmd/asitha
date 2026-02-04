@@ -1096,12 +1096,19 @@ async def update_task(task_id: str, req: TaskUpdate, user: dict = Depends(get_cu
         update_data["send_date"] = req.send_date
     if req.send_time:
         update_data["send_time"] = req.send_time
+    # Store sent email content
+    if req.sent_email_content:
+        update_data["sent_email_content"] = req.sent_email_content
     
     if update_data:
         await db.tasks.update_one({"id": task_id}, {"$set": update_data})
     
     # Log activity
     if req.status == "sent":
+        log_details = {"sent_timestamp": req.sent_timestamp}
+        if req.sent_email_content:
+            log_details["sent_email_content"] = req.sent_email_content
+        
         log_doc = {
             "id": str(uuid.uuid4()),
             "task_id": task_id,
@@ -1109,16 +1116,17 @@ async def update_task(task_id: str, req: TaskUpdate, user: dict = Depends(get_cu
             "seat_id": task["seat_id"],
             "project_id": task["project_id"],
             "action": "sent",
-            "details": {"sent_timestamp": req.sent_timestamp},
+            "details": log_details,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         await db.activity_logs.insert_one(log_doc)
         
         # Update prospect status
-        await db.prospects.update_one(
-            {"id": task["prospect_id"]},
-            {"$set": {"status": f"step_{task['step_number']}_sent"}}
-        )
+        if task.get("prospect_id"):
+            await db.prospects.update_one(
+                {"id": task["prospect_id"]},
+                {"$set": {"status": f"step_{task['step_number']}_sent"}}
+            )
     
     if req.reply_content:
         log_doc = {
@@ -1134,10 +1142,11 @@ async def update_task(task_id: str, req: TaskUpdate, user: dict = Depends(get_cu
         await db.activity_logs.insert_one(log_doc)
         
         # Update prospect status
-        await db.prospects.update_one(
-            {"id": task["prospect_id"]},
-            {"$set": {"status": "replied"}}
-        )
+        if task.get("prospect_id"):
+            await db.prospects.update_one(
+                {"id": task["prospect_id"]},
+                {"$set": {"status": "replied"}}
+            )
     
     updated = await db.tasks.find_one({"id": task_id}, {"_id": 0})
     return TaskResponse(**updated)
