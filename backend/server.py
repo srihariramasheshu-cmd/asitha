@@ -1006,16 +1006,19 @@ async def get_calendar_tasks(
 
 @api_router.post("/tasks/lever")
 async def apply_schedule_lever(req: ScheduleLeverRequest, admin: dict = Depends(require_admin)):
-    """The LEVER: Auto-generate 5-step sequences for prospects"""
+    """The LEVER: Auto-generate 5-step sequences for prospects with smart scheduling"""
     from datetime import timedelta
+    import random
     
-    # Get project for gap_days
+    # Get project for scheduling settings
     project = await db.projects.find_one({"id": req.project_id}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
     gap_days = project.get("gap_days", 3)
     step_labels = project.get("step_labels", ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"])
+    mails_per_domain_per_day = project.get("mails_per_domain_per_day", 10)
+    jitter_minutes = project.get("jitter_minutes", 0)
     
     # Get prospects
     prospect_query = {"project_id": req.project_id}
@@ -1035,13 +1038,54 @@ async def apply_schedule_lever(req: ScheduleLeverRequest, admin: dict = Depends(
     
     created_count = 0
     
+    # Track domain usage per day for smart scheduling
+    # Format: {date_string: {domain: count}}
+    domain_day_tracker = {}
+    
+    def get_domain_from_email(email):
+        """Extract domain from email address"""
+        if email and '@' in email:
+            return email.split('@')[1].lower()
+        return 'unknown'
+    
+    def find_next_available_date(base_date, domain, domain_tracker, limit):
+        """Find next date where domain limit is not exceeded"""
+        current_date = base_date
+        for _ in range(30):  # Max 30 days lookahead
+            date_str = current_date.strftime("%Y-%m-%d")
+            if date_str not in domain_tracker:
+                domain_tracker[date_str] = {}
+            if domain_tracker[date_str].get(domain, 0) < limit:
+                domain_tracker[date_str][domain] = domain_tracker[date_str].get(domain, 0) + 1
+                return current_date
+            current_date = current_date + timedelta(days=1)
+        return base_date  # Fallback to base date if no slot found
+    
     for prospect in prospects:
         # Delete existing tasks for this prospect (to allow re-scheduling)
         await db.tasks.delete_many({"prospect_id": prospect["id"]})
         
+        domain = get_domain_from_email(prospect.get("email", ""))
+        
         # Create 5 tasks for each prospect
         for step in range(1, 6):
-            task_date = start_dt + timedelta(days=(step - 1) * gap_days)
+            base_task_date = start_dt + timedelta(days=(step - 1) * gap_days)
+            
+            # Apply domain-per-day limit
+            task_date = find_next_available_date(base_task_date, domain, domain_day_tracker, mails_per_domain_per_day)
+            
+            # Apply jitter to time
+            task_time = req.start_time
+            if jitter_minutes > 0:
+                jitter = random.randint(-jitter_minutes, jitter_minutes)
+                task_datetime = datetime.strptime(f"{task_date.strftime('%Y-%m-%d')} {req.start_time}", "%Y-%m-%d %H:%M")
+                task_datetime = task_datetime + timedelta(minutes=jitter)
+                # Ensure time stays within business hours (8am - 7pm)
+                if task_datetime.hour < 8:
+                    task_datetime = task_datetime.replace(hour=8, minute=0)
+                elif task_datetime.hour >= 19:
+                    task_datetime = task_datetime.replace(hour=18, minute=45)
+                task_time = task_datetime.strftime("%H:%M")
             
             task_doc = {
                 "id": str(uuid.uuid4()),
@@ -1050,9 +1094,10 @@ async def apply_schedule_lever(req: ScheduleLeverRequest, admin: dict = Depends(
                 "project_id": req.project_id,
                 "step_number": step,
                 "send_date": task_date.strftime("%Y-%m-%d"),
-                "send_time": req.start_time,
+                "send_time": task_time,
                 "status": "pending",
                 "sent_timestamp": None,
+                "sent_email_content": None,
                 "description": step_labels[step - 1] if step <= len(step_labels) else f"Step {step}",
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
@@ -1064,6 +1109,8 @@ async def apply_schedule_lever(req: ScheduleLeverRequest, admin: dict = Depends(
         "prospects_count": len(prospects),
         "tasks_count": created_count,
         "gap_days": gap_days,
+        "mails_per_domain_per_day": mails_per_domain_per_day,
+        "jitter_minutes": jitter_minutes,
         "start_date": req.start_date
     }
 
