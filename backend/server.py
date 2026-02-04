@@ -189,6 +189,7 @@ class TaskUpdate(BaseModel):
     reply_content: Optional[str] = None
     send_date: Optional[str] = None  # For drag-drop rescheduling
     send_time: Optional[str] = None
+    sent_email_content: Optional[str] = None  # Store the actual email content when marked as sent
 
 class TaskResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -201,17 +202,13 @@ class TaskResponse(BaseModel):
     send_time: str
     status: str
     sent_timestamp: Optional[str] = None
+    sent_email_content: Optional[str] = None
     description: Optional[str] = ""
     created_at: str
     # Include prospect info for calendar display
     prospect_name: Optional[str] = None
     prospect_company: Optional[str] = None
     prospect_email: Optional[str] = None
-
-class TaskUpdate(BaseModel):
-    status: Optional[str] = None
-    sent_timestamp: Optional[str] = None
-    reply_content: Optional[str] = None
 
 class ActivityLogResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
