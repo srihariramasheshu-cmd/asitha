@@ -1198,6 +1198,78 @@ async def update_task(task_id: str, req: TaskUpdate, user: dict = Depends(get_cu
     updated = await db.tasks.find_one({"id": task_id}, {"_id": 0})
     return TaskResponse(**updated)
 
+# ============== PROSPECT NOTES ==============
+
+@api_router.post("/notes", response_model=NoteResponse)
+async def create_note(req: NoteCreate, user: dict = Depends(get_current_user)):
+    """Create a note for a prospect"""
+    # Verify prospect exists and user has access
+    prospect = await db.prospects.find_one({"id": req.prospect_id}, {"_id": 0})
+    if not prospect:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+    
+    if user["role"] not in ["admin", "super_admin"] and prospect["seat_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to add notes to this prospect")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    note_doc = {
+        "id": str(uuid.uuid4()),
+        "prospect_id": req.prospect_id,
+        "user_id": user["id"],
+        "user_name": user["name"],
+        "content": req.content,
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.notes.insert_one(note_doc)
+    return NoteResponse(**note_doc)
+
+@api_router.get("/notes/prospect/{prospect_id}", response_model=List[NoteResponse])
+async def get_prospect_notes(prospect_id: str, user: dict = Depends(get_current_user)):
+    """Get all notes for a prospect"""
+    prospect = await db.prospects.find_one({"id": prospect_id}, {"_id": 0})
+    if not prospect:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+    
+    if user["role"] not in ["admin", "super_admin"] and prospect["seat_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view notes for this prospect")
+    
+    notes = await db.notes.find({"prospect_id": prospect_id}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [NoteResponse(**n) for n in notes]
+
+@api_router.put("/notes/{note_id}", response_model=NoteResponse)
+async def update_note(note_id: str, req: NoteUpdate, user: dict = Depends(get_current_user)):
+    """Update a note"""
+    note = await db.notes.find_one({"id": note_id}, {"_id": 0})
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Only the note author or admin can update
+    if user["role"] not in ["admin", "super_admin"] and note["user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to update this note")
+    
+    await db.notes.update_one(
+        {"id": note_id},
+        {"$set": {"content": req.content, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    updated = await db.notes.find_one({"id": note_id}, {"_id": 0})
+    return NoteResponse(**updated)
+
+@api_router.delete("/notes/{note_id}")
+async def delete_note(note_id: str, user: dict = Depends(get_current_user)):
+    """Delete a note"""
+    note = await db.notes.find_one({"id": note_id}, {"_id": 0})
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Only the note author or admin can delete
+    if user["role"] not in ["admin", "super_admin"] and note["user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this note")
+    
+    await db.notes.delete_one({"id": note_id})
+    return {"message": "Note deleted"}
+
 # ============== ACTIVITY LOGS ==============
 
 @api_router.get("/activity-logs", response_model=List[ActivityLogResponse])
