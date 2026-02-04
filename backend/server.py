@@ -597,7 +597,7 @@ async def get_project_seats(project_id: str, admin: dict = Depends(require_admin
 @api_router.post("/prospects", response_model=ProspectResponse)
 async def create_prospect(req: ProspectCreate, user: dict = Depends(get_current_user)):
     # Verify project access
-    if user["role"] != "admin":
+    if user["role"] not in ["admin", "super_admin"]:
         assignment = await db.project_assignments.find_one({"project_id": req.project_id, "seat_id": user["id"]})
         if not assignment:
             raise HTTPException(status_code=403, detail="Not assigned to this project")
