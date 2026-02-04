@@ -228,6 +228,24 @@ class ColumnMapping(BaseModel):
 class ScheduleUpload(BaseModel):
     tasks: List[TaskBase]
 
+# Note models
+class NoteCreate(BaseModel):
+    prospect_id: str
+    content: str
+
+class NoteUpdate(BaseModel):
+    content: str
+
+class NoteResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    prospect_id: str
+    user_id: str
+    user_name: str
+    content: str
+    created_at: str
+    updated_at: str
+
 # ============== AUTH HELPERS ==============
 
 def hash_password(password: str) -> str:
