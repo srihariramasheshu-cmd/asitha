@@ -10,6 +10,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,10 @@ import {
   MessageSquare,
   Calendar as CalendarIcon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  StickyNote,
+  Plus,
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,6 +67,15 @@ export default function CalendarDashboard() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [marking, setMarking] = useState(false);
+  
+  // Mark as Sent modal state
+  const [showSentModal, setShowSentModal] = useState(false);
+  const [sentEmailContent, setSentEmailContent] = useState("");
+  
+  // Notes state
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState("");
+  const [loadingNotes, setLoadingNotes] = useState(false);
 
   useEffect(() => {
     fetchProjects();
