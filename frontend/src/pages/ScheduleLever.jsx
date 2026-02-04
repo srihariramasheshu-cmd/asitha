@@ -40,6 +40,8 @@ export default function ScheduleLever() {
   const [startDate, setStartDate] = useState(null);
   const [startTime, setStartTime] = useState("09:00");
   const [gapDays, setGapDays] = useState(3);
+  const [mailsPerDomainPerDay, setMailsPerDomainPerDay] = useState(10);
+  const [jitterMinutes, setJitterMinutes] = useState(0);
   const [result, setResult] = useState(null);
 
   useEffect(() => {
@@ -49,10 +51,12 @@ export default function ScheduleLever() {
   useEffect(() => {
     if (selectedProject) {
       fetchProspectsCount(selectedProject);
-      // Set gap days from project
+      // Set settings from project
       const project = projects.find(p => p.id === selectedProject);
       if (project) {
         setGapDays(project.gap_days || 3);
+        setMailsPerDomainPerDay(project.mails_per_domain_per_day || 10);
+        setJitterMinutes(project.jitter_minutes || 0);
       }
     }
   }, [selectedProject, projects]);
