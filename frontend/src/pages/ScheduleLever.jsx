@@ -111,19 +111,21 @@ export default function ScheduleLever() {
     }
   };
 
-  const updateProjectGap = async () => {
+  const updateProjectSettings = async () => {
     if (!selectedProject) return;
     
     try {
       const project = projects.find(p => p.id === selectedProject);
       await axios.put(`${API}/projects/${selectedProject}`, {
         ...project,
-        gap_days: gapDays
+        gap_days: gapDays,
+        mails_per_domain_per_day: mailsPerDomainPerDay,
+        jitter_minutes: jitterMinutes
       });
-      toast.success("Gap days updated");
+      toast.success("Project settings updated");
       fetchProjects();
     } catch (error) {
-      toast.error("Failed to update gap days");
+      toast.error("Failed to update settings");
     }
   };
 
