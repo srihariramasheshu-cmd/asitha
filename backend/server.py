@@ -481,6 +481,10 @@ async def list_projects(user: dict = Depends(get_current_user)):
             p["gap_days"] = 3
         if "step_labels" not in p:
             p["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
+        if "mails_per_domain_per_day" not in p:
+            p["mails_per_domain_per_day"] = 10
+        if "jitter_minutes" not in p:
+            p["jitter_minutes"] = 0
     return [ProjectResponse(**p) for p in projects]
 
 @api_router.get("/projects/{project_id}", response_model=ProjectResponse)
