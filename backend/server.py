@@ -8,6 +8,7 @@ import os
 import logging
 import io
 import csv
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
