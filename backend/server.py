@@ -559,15 +559,23 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
         if not assignment:
             raise HTTPException(status_code=403, detail="Not assigned to this project")
     
-    # Add defaults
-    if "gap_days" not in project:
-        project["gap_days"] = 3
-    if "step_labels" not in project:
-        project["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
-    if "mails_per_domain_per_day" not in project:
-        project["mails_per_domain_per_day"] = 10
-    if "jitter_minutes" not in project:
-        project["jitter_minutes"] = 0
+    # Add defaults for migration
+    if "max_mails_per_day_per_mail_id" not in project:
+        project["max_mails_per_day_per_mail_id"] = 10
+    if "min_time_gap_minutes" not in project:
+        project["min_time_gap_minutes"] = 5
+    if "time_jitter_minutes" not in project:
+        project["time_jitter_minutes"] = 0
+    if "touchpoints_count" not in project:
+        project["touchpoints_count"] = 5
+    if "touchpoint_gaps" not in project:
+        project["touchpoint_gaps"] = [0, 3, 5, 7, 10]
+    if "work_start_time" not in project:
+        project["work_start_time"] = "09:00"
+    if "work_end_time" not in project:
+        project["work_end_time"] = "18:00"
+    if "working_days" not in project:
+        project["working_days"] = [1, 2, 3, 4, 5]
     
     return ProjectResponse(**project)
 
