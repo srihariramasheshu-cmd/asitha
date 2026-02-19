@@ -1972,9 +1972,9 @@ async def start_simulation(admin: dict = Depends(require_admin)):
     # ========== CREATE SEATS ==========
     seats_data = []
     seat_names = [
-        ("Alex Johnson", "alex.johnson@simcompany.test"),
-        ("Morgan Smith", "morgan.smith@simcompany.test"),
-        ("Taylor Brown", "taylor.brown@simcompany.test")
+        ("Alex Johnson", "alex.johnson@simcompany.demo"),
+        ("Morgan Smith", "morgan.smith@simcompany.demo"),
+        ("Taylor Brown", "taylor.brown@simcompany.demo")
     ]
     
     for i, (name, email) in enumerate(seat_names):
