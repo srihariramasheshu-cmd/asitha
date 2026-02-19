@@ -1250,7 +1250,7 @@ async def get_calendar_tasks(
     
     tasks = await db.tasks.find(query, {"_id": 0}).to_list(10000)
     
-    # Enrich with prospect and project info
+    # Enrich with prospect, project, and mail ID info
     calendar_events = []
     for t in tasks:
         event = {**t}
@@ -1265,122 +1265,359 @@ async def get_calendar_tasks(
         project = await db.projects.find_one({"id": t["project_id"]}, {"_id": 0})
         if project:
             event["project_name"] = project.get("name", "")
-            step_labels = project.get("step_labels", ["Intro", "F/U 1", "F/U 2", "F/U 3", "F/U 4"])
-            event["step_label"] = step_labels[t["step_number"] - 1] if t["step_number"] <= len(step_labels) else f"Step {t['step_number']}"
+            touchpoints_count = project.get("touchpoints_count", 5)
+            step_label = f"Touchpoint {t['step_number']}" if t['step_number'] <= touchpoints_count else f"Step {t['step_number']}"
+            if t['step_number'] == 1:
+                step_label = "Intro Email"
+            elif t['step_number'] <= touchpoints_count:
+                step_label = f"Follow-up {t['step_number'] - 1}"
+            event["step_label"] = step_label
+        
+        # Get mail ID info
+        if t.get("assigned_mail_id"):
+            mail_id = await db.mail_ids.find_one({"id": t["assigned_mail_id"]}, {"_id": 0})
+            if mail_id:
+                event["assigned_mail_email"] = mail_id.get("email", "")
         
         calendar_events.append(event)
     
     return calendar_events
 
-@api_router.post("/tasks/lever")
-async def apply_schedule_lever(req: ScheduleLeverRequest, admin: dict = Depends(require_admin)):
-    """The LEVER: Auto-generate 5-step sequences for prospects with smart scheduling"""
-    from datetime import timedelta
-    import random
+# ============== SMART SCHEDULING ENGINE ==============
+
+class ScheduleProspectsRequest(BaseModel):
+    """Request to schedule prospects with the smart engine"""
+    project_id: str
+    prospect_ids: Optional[List[str]] = None  # If None, schedule all unscheduled prospects
+
+@api_router.post("/projects/{project_id}/check-config")
+async def check_project_config(project_id: str, user: dict = Depends(get_current_user)):
+    """Check if project has all required configuration for scheduling"""
+    if user["role"] not in ["admin", "super_admin"]:
+        assignment = await db.project_assignments.find_one({"project_id": project_id, "seat_id": user["id"]})
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Not assigned to this project")
     
-    # Get project for scheduling settings
-    project = await db.projects.find_one({"id": req.project_id}, {"_id": 0})
+    project = await db.projects.find_one({"id": project_id}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    gap_days = project.get("gap_days", 3)
-    step_labels = project.get("step_labels", ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"])
-    mails_per_domain_per_day = project.get("mails_per_domain_per_day", 10)
-    jitter_minutes = project.get("jitter_minutes", 0)
+    issues = []
     
-    # Get prospects
-    prospect_query = {"project_id": req.project_id}
-    if req.prospect_ids:
-        prospect_query["id"] = {"$in": req.prospect_ids}
+    # Check mail domains
+    domains = await db.mail_domains.find({"project_id": project_id}, {"_id": 0}).to_list(100)
+    if not domains:
+        issues.append("No mail domains configured for this project")
     
-    prospects = await db.prospects.find(prospect_query, {"_id": 0}).to_list(10000)
+    # Check mail IDs
+    mail_ids = await db.mail_ids.find({"project_id": project_id}, {"_id": 0}).to_list(100)
+    if not mail_ids:
+        issues.append("No mail IDs configured for this project")
     
-    if not prospects:
-        raise HTTPException(status_code=400, detail="No prospects found for this project")
+    # Check if seat has mail IDs assigned (for seat users)
+    if user["role"] == "seat":
+        seat_mail_ids = await db.mail_ids.find({"project_id": project_id, "seat_id": user["id"]}, {"_id": 0}).to_list(100)
+        if not seat_mail_ids:
+            issues.append("No mail IDs assigned to you for this project")
     
-    # Parse start date
-    try:
-        start_dt = datetime.strptime(f"{req.start_date} {req.start_time}", "%Y-%m-%d %H:%M")
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD and HH:MM")
+    # Check scheduling config
+    if not project.get("touchpoints_count") or project.get("touchpoints_count", 0) < 1:
+        issues.append("Touchpoints count not configured")
     
-    created_count = 0
+    touchpoint_gaps = project.get("touchpoint_gaps", [])
+    touchpoints_count = project.get("touchpoints_count", 5)
+    if len(touchpoint_gaps) < touchpoints_count:
+        issues.append(f"Touchpoint gaps not fully configured (need {touchpoints_count}, have {len(touchpoint_gaps)})")
     
-    # Track domain usage per day for smart scheduling
-    # Format: {date_string: {domain: count}}
-    domain_day_tracker = {}
-    
-    def get_domain_from_email(email):
-        """Extract domain from email address"""
-        if email and '@' in email:
-            return email.split('@')[1].lower()
-        return 'unknown'
-    
-    def find_next_available_date(base_date, domain, domain_tracker, limit):
-        """Find next date where domain limit is not exceeded"""
-        current_date = base_date
-        for _ in range(30):  # Max 30 days lookahead
-            date_str = current_date.strftime("%Y-%m-%d")
-            if date_str not in domain_tracker:
-                domain_tracker[date_str] = {}
-            if domain_tracker[date_str].get(domain, 0) < limit:
-                domain_tracker[date_str][domain] = domain_tracker[date_str].get(domain, 0) + 1
-                return current_date
-            current_date = current_date + timedelta(days=1)
-        return base_date  # Fallback to base date if no slot found
-    
-    for prospect in prospects:
-        # Delete existing tasks for this prospect (to allow re-scheduling)
-        await db.tasks.delete_many({"prospect_id": prospect["id"]})
-        
-        domain = get_domain_from_email(prospect.get("email", ""))
-        
-        # Create 5 tasks for each prospect
-        for step in range(1, 6):
-            base_task_date = start_dt + timedelta(days=(step - 1) * gap_days)
-            
-            # Apply domain-per-day limit
-            task_date = find_next_available_date(base_task_date, domain, domain_day_tracker, mails_per_domain_per_day)
-            
-            # Apply jitter to time
-            task_time = req.start_time
-            if jitter_minutes > 0:
-                jitter = random.randint(-jitter_minutes, jitter_minutes)
-                task_datetime = datetime.strptime(f"{task_date.strftime('%Y-%m-%d')} {req.start_time}", "%Y-%m-%d %H:%M")
-                task_datetime = task_datetime + timedelta(minutes=jitter)
-                # Ensure time stays within business hours (8am - 7pm)
-                if task_datetime.hour < 8:
-                    task_datetime = task_datetime.replace(hour=8, minute=0)
-                elif task_datetime.hour >= 19:
-                    task_datetime = task_datetime.replace(hour=18, minute=45)
-                task_time = task_datetime.strftime("%H:%M")
-            
-            task_doc = {
-                "id": str(uuid.uuid4()),
-                "prospect_id": prospect["id"],
-                "seat_id": prospect["seat_id"],
-                "project_id": req.project_id,
-                "step_number": step,
-                "send_date": task_date.strftime("%Y-%m-%d"),
-                "send_time": task_time,
-                "status": "pending",
-                "sent_timestamp": None,
-                "sent_email_content": None,
-                "description": step_labels[step - 1] if step <= len(step_labels) else f"Step {step}",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }
-            await db.tasks.insert_one(task_doc)
-            created_count += 1
+    if not project.get("working_days"):
+        issues.append("Working days not configured")
     
     return {
-        "message": f"Generated {created_count} tasks for {len(prospects)} prospects",
-        "prospects_count": len(prospects),
-        "tasks_count": created_count,
-        "gap_days": gap_days,
-        "mails_per_domain_per_day": mails_per_domain_per_day,
-        "jitter_minutes": jitter_minutes,
-        "start_date": req.start_date
+        "ready": len(issues) == 0,
+        "issues": issues,
+        "domains_count": len(domains),
+        "mail_ids_count": len(mail_ids),
+        "touchpoints_count": project.get("touchpoints_count", 5)
     }
+
+@api_router.post("/projects/{project_id}/schedule-prospects", response_model=SchedulingReportResponse)
+async def schedule_prospects(project_id: str, user: dict = Depends(get_current_user)):
+    """
+    Smart scheduling engine that:
+    1. Gets unscheduled prospects for the seat
+    2. Assigns mail IDs using round-robin
+    3. Schedules all touchpoints respecting all constraints
+    4. Returns a detailed scheduling report
+    """
+    from datetime import timedelta
+    import random
+    
+    # Verify project access
+    if user["role"] not in ["admin", "super_admin"]:
+        assignment = await db.project_assignments.find_one({"project_id": project_id, "seat_id": user["id"]})
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Not assigned to this project")
+    
+    # Get project config
+    project = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Get scheduling config with defaults
+    max_mails_per_day = project.get("max_mails_per_day_per_mail_id", 10)
+    min_time_gap = project.get("min_time_gap_minutes", 5)
+    time_jitter = project.get("time_jitter_minutes", 0)
+    touchpoints_count = project.get("touchpoints_count", 5)
+    touchpoint_gaps = project.get("touchpoint_gaps", [0, 3, 5, 7, 10])
+    work_start = project.get("work_start_time", "09:00")
+    work_end = project.get("work_end_time", "18:00")
+    working_days = project.get("working_days", [1, 2, 3, 4, 5])  # 1=Monday
+    
+    # Parse work hours
+    work_start_h, work_start_m = map(int, work_start.split(':'))
+    work_end_h, work_end_m = map(int, work_end.split(':'))
+    
+    # Get seat's mail IDs
+    mail_id_query = {"project_id": project_id}
+    if user["role"] == "seat":
+        mail_id_query["seat_id"] = user["id"]
+    
+    mail_ids = await db.mail_ids.find(mail_id_query, {"_id": 0}).to_list(100)
+    if not mail_ids:
+        raise HTTPException(status_code=400, detail="No mail IDs available for scheduling")
+    
+    # Get prospects that need scheduling (no assigned_mail_id or no tasks)
+    prospect_query = {"project_id": project_id, "seat_id": user["id"]}
+    prospects = await db.prospects.find(prospect_query, {"_id": 0}).to_list(10000)
+    
+    # Filter to only unscheduled prospects (those without assigned_mail_id)
+    unscheduled_prospects = [p for p in prospects if not p.get("assigned_mail_id")]
+    
+    if not unscheduled_prospects:
+        raise HTTPException(status_code=400, detail="No unscheduled prospects found")
+    
+    # Initialize tracking structures
+    # Track mail usage: {mail_id: {date: [scheduled_times]}}
+    mail_schedule_tracker = {m["id"]: {} for m in mail_ids}
+    
+    # Load existing tasks to populate tracker
+    existing_tasks = await db.tasks.find({"project_id": project_id}, {"_id": 0}).to_list(100000)
+    for task in existing_tasks:
+        if task.get("assigned_mail_id"):
+            mid = task["assigned_mail_id"]
+            if mid in mail_schedule_tracker:
+                date = task["send_date"]
+                if date not in mail_schedule_tracker[mid]:
+                    mail_schedule_tracker[mid][date] = []
+                mail_schedule_tracker[mid][date].append(task["send_time"])
+    
+    # Round-robin mail ID assignment
+    mail_id_index = 0
+    
+    def get_next_mail_id():
+        nonlocal mail_id_index
+        mail_id = mail_ids[mail_id_index % len(mail_ids)]
+        mail_id_index += 1
+        return mail_id
+    
+    def is_working_day(dt):
+        return dt.isoweekday() in working_days
+    
+    def find_next_working_day(dt):
+        while not is_working_day(dt):
+            dt = dt + timedelta(days=1)
+        return dt
+    
+    def get_available_time_slot(mail_id_id, target_date, tracker):
+        """Find an available time slot for a mail ID on a given date"""
+        date_str = target_date.strftime("%Y-%m-%d")
+        
+        # Get existing times for this mail ID on this date
+        existing_times = tracker.get(mail_id_id, {}).get(date_str, [])
+        
+        # Check if we've hit the daily limit
+        if len(existing_times) >= max_mails_per_day:
+            return None
+        
+        # Calculate available time slots
+        work_minutes = (work_end_h * 60 + work_end_m) - (work_start_h * 60 + work_start_m)
+        
+        if not existing_times:
+            # First email of the day - start at work_start with optional jitter
+            base_minutes = work_start_h * 60 + work_start_m
+            if time_jitter > 0:
+                base_minutes += random.randint(0, time_jitter)
+        else:
+            # Find the latest existing time and add min_time_gap
+            latest_time = max(existing_times)
+            h, m = map(int, latest_time.split(':'))
+            base_minutes = h * 60 + m + min_time_gap
+            if time_jitter > 0:
+                base_minutes += random.randint(0, time_jitter)
+        
+        # Check if we're still within work hours
+        if base_minutes >= work_end_h * 60 + work_end_m:
+            return None
+        
+        hours = base_minutes // 60
+        minutes = base_minutes % 60
+        return f"{hours:02d}:{minutes:02d}"
+    
+    # Scheduling results
+    scheduled_prospects = []
+    failed_prospects = []
+    total_tasks_created = 0
+    
+    today = datetime.now(timezone.utc).date()
+    start_date = today + timedelta(days=1)  # Start scheduling from tomorrow
+    start_date = datetime.combine(start_date, datetime.min.time())
+    
+    for prospect in unscheduled_prospects:
+        assigned_mail = get_next_mail_id()
+        prospect_tasks = []
+        scheduling_failed = False
+        failed_reason = None
+        
+        for tp_index in range(touchpoints_count):
+            if tp_index >= len(touchpoint_gaps):
+                gap_days = touchpoint_gaps[-1] if touchpoint_gaps else 3
+            else:
+                gap_days = touchpoint_gaps[tp_index]
+            
+            # Calculate base date for this touchpoint
+            if tp_index == 0:
+                base_date = start_date
+            else:
+                # Add gap from previous touchpoint
+                prev_task = prospect_tasks[-1]
+                prev_date = datetime.strptime(prev_task["send_date"], "%Y-%m-%d")
+                base_date = prev_date + timedelta(days=gap_days)
+            
+            # Find next working day
+            target_date = find_next_working_day(base_date)
+            
+            # Try to find an available slot within 14 days
+            max_attempts = 14
+            slot_found = False
+            
+            for attempt in range(max_attempts):
+                check_date = target_date + timedelta(days=attempt)
+                if not is_working_day(check_date):
+                    continue
+                
+                time_slot = get_available_time_slot(
+                    assigned_mail["id"],
+                    check_date,
+                    mail_schedule_tracker
+                )
+                
+                if time_slot:
+                    # Found a slot!
+                    date_str = check_date.strftime("%Y-%m-%d")
+                    
+                    # Update tracker
+                    if assigned_mail["id"] not in mail_schedule_tracker:
+                        mail_schedule_tracker[assigned_mail["id"]] = {}
+                    if date_str not in mail_schedule_tracker[assigned_mail["id"]]:
+                        mail_schedule_tracker[assigned_mail["id"]][date_str] = []
+                    mail_schedule_tracker[assigned_mail["id"]][date_str].append(time_slot)
+                    
+                    # Create task
+                    step_label = "Intro Email" if tp_index == 0 else f"Follow-up {tp_index}"
+                    task_doc = {
+                        "id": str(uuid.uuid4()),
+                        "prospect_id": prospect["id"],
+                        "seat_id": prospect["seat_id"],
+                        "project_id": project_id,
+                        "step_number": tp_index + 1,
+                        "send_date": date_str,
+                        "send_time": time_slot,
+                        "status": "pending",
+                        "sent_timestamp": None,
+                        "sent_email_content": None,
+                        "assigned_mail_id": assigned_mail["id"],
+                        "description": step_label,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    prospect_tasks.append(task_doc)
+                    slot_found = True
+                    break
+            
+            if not slot_found:
+                scheduling_failed = True
+                failed_reason = f"Could not schedule touchpoint {tp_index + 1} within 2 weeks"
+                break
+        
+        if scheduling_failed:
+            failed_prospects.append({
+                "prospect_id": prospect["id"],
+                "company_name": prospect.get("company_name", ""),
+                "contact_name": prospect.get("contact_name", ""),
+                "reason": failed_reason
+            })
+        else:
+            # Save all tasks for this prospect
+            for task in prospect_tasks:
+                await db.tasks.insert_one(task)
+                total_tasks_created += 1
+            
+            # Update prospect with assigned mail ID
+            await db.prospects.update_one(
+                {"id": prospect["id"]},
+                {"$set": {"assigned_mail_id": assigned_mail["id"]}}
+            )
+            
+            scheduled_prospects.append({
+                "prospect_id": prospect["id"],
+                "company_name": prospect.get("company_name", ""),
+                "contact_name": prospect.get("contact_name", ""),
+                "assigned_mail_id": assigned_mail["id"],
+                "assigned_mail_email": assigned_mail["email"],
+                "tasks_count": len(prospect_tasks),
+                "first_task_date": prospect_tasks[0]["send_date"],
+                "last_task_date": prospect_tasks[-1]["send_date"]
+            })
+    
+    # Create scheduling report
+    report_doc = {
+        "id": str(uuid.uuid4()),
+        "project_id": project_id,
+        "seat_id": user["id"],
+        "total_prospects": len(unscheduled_prospects),
+        "scheduled_prospects": len(scheduled_prospects),
+        "failed_prospects": len(failed_prospects),
+        "total_tasks_created": total_tasks_created,
+        "report_data": {
+            "scheduled": scheduled_prospects,
+            "failed": failed_prospects,
+            "config": {
+                "max_mails_per_day": max_mails_per_day,
+                "min_time_gap": min_time_gap,
+                "time_jitter": time_jitter,
+                "touchpoints_count": touchpoints_count,
+                "touchpoint_gaps": touchpoint_gaps[:touchpoints_count],
+                "work_hours": f"{work_start} - {work_end}",
+                "working_days": working_days,
+                "mail_ids_used": len(mail_ids)
+            }
+        },
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.scheduling_reports.insert_one(report_doc)
+    
+    return SchedulingReportResponse(**report_doc)
+
+@api_router.get("/projects/{project_id}/scheduling-reports", response_model=List[SchedulingReportResponse])
+async def get_scheduling_reports(project_id: str, user: dict = Depends(get_current_user)):
+    """Get scheduling reports for a project"""
+    query = {"project_id": project_id}
+    
+    # Seat can only see their own reports
+    if user["role"] == "seat":
+        query["seat_id"] = user["id"]
+    
+    reports = await db.scheduling_reports.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return [SchedulingReportResponse(**r) for r in reports]
 
 @api_router.get("/tasks/today", response_model=List[TaskResponse])
 async def get_today_tasks(user: dict = Depends(get_current_user)):
