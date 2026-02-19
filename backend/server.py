@@ -1944,7 +1944,7 @@ async def start_simulation(admin: dict = Depends(require_admin)):
     domain_id = str(uuid.uuid4())
     domain_doc = {
         "id": domain_id,
-        "domain": "simcompany.test",
+        "domain": "simcompany.demo",
         "project_id": project_id,
         "simulation_id": simulation_id,
         "created_by": admin["id"],
@@ -1954,7 +1954,7 @@ async def start_simulation(admin: dict = Depends(require_admin)):
     
     # ========== CREATE MAIL IDS ==========
     mail_ids_data = []
-    mail_emails = ["alice@simcompany.test", "bob@simcompany.test", "carol@simcompany.test"]
+    mail_emails = ["alice@simcompany.demo", "bob@simcompany.demo", "carol@simcompany.demo"]
     for email in mail_emails:
         mail_id = str(uuid.uuid4())
         mail_id_doc = {
