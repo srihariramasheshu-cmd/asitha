@@ -250,6 +250,8 @@ class TaskResponse(BaseModel):
     sent_timestamp: Optional[str] = None
     sent_email_content: Optional[str] = None
     description: Optional[str] = ""
+    assigned_mail_id: Optional[str] = None
+    assigned_mail_email: Optional[str] = None  # Email address for display
     created_at: str
     # Include prospect info for calendar display
     prospect_name: Optional[str] = None
