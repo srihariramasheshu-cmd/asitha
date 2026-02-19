@@ -629,7 +629,177 @@ async def delete_project(project_id: str, admin: dict = Depends(require_admin)):
     await db.project_assignments.delete_many({"project_id": project_id})
     await db.prospects.delete_many({"project_id": project_id})
     await db.tasks.delete_many({"project_id": project_id})
+    await db.mail_domains.delete_many({"project_id": project_id})
+    await db.mail_ids.delete_many({"project_id": project_id})
+    await db.scheduling_reports.delete_many({"project_id": project_id})
     return {"message": "Project deleted"}
+
+# ============== MAIL DOMAIN MANAGEMENT ==============
+
+@api_router.post("/mail-domains", response_model=MailDomainResponse)
+async def create_mail_domain(req: MailDomainCreate, admin: dict = Depends(require_admin)):
+    """Create a mail domain for a project. One domain can only belong to one project."""
+    # Check if domain is already used by any project
+    existing = await db.mail_domains.find_one({"domain": req.domain.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Domain '{req.domain}' is already assigned to another project")
+    
+    # Verify project exists
+    project = await db.projects.find_one({"id": req.project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    domain_doc = {
+        "id": str(uuid.uuid4()),
+        "domain": req.domain.lower(),
+        "project_id": req.project_id,
+        "created_by": admin["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.mail_domains.insert_one(domain_doc)
+    return MailDomainResponse(**domain_doc)
+
+@api_router.get("/mail-domains", response_model=List[MailDomainResponse])
+async def list_mail_domains(project_id: Optional[str] = None, admin: dict = Depends(require_admin)):
+    """List all mail domains, optionally filtered by project"""
+    query = {}
+    if project_id:
+        query["project_id"] = project_id
+    domains = await db.mail_domains.find(query, {"_id": 0}).to_list(1000)
+    return [MailDomainResponse(**d) for d in domains]
+
+@api_router.get("/projects/{project_id}/mail-domains", response_model=List[MailDomainResponse])
+async def get_project_mail_domains(project_id: str, user: dict = Depends(get_current_user)):
+    """Get mail domains for a project"""
+    # Verify project access
+    if user["role"] not in ["admin", "super_admin"]:
+        assignment = await db.project_assignments.find_one({"project_id": project_id, "seat_id": user["id"]})
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Not assigned to this project")
+    
+    domains = await db.mail_domains.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
+    return [MailDomainResponse(**d) for d in domains]
+
+@api_router.delete("/mail-domains/{domain_id}")
+async def delete_mail_domain(domain_id: str, admin: dict = Depends(require_admin)):
+    """Delete a mail domain and all its mail IDs"""
+    domain = await db.mail_domains.find_one({"id": domain_id})
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    
+    # Delete all mail IDs under this domain
+    await db.mail_ids.delete_many({"domain_id": domain_id})
+    await db.mail_domains.delete_one({"id": domain_id})
+    return {"message": "Domain and associated mail IDs deleted"}
+
+# ============== MAIL ID MANAGEMENT ==============
+
+@api_router.post("/mail-ids", response_model=MailIdResponse)
+async def create_mail_id(req: MailIdCreate, admin: dict = Depends(require_admin)):
+    """Create a mail ID under a domain. One mail ID can only exist in one project."""
+    # Check if mail ID already exists anywhere
+    existing = await db.mail_ids.find_one({"email": req.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Mail ID '{req.email}' already exists in another project")
+    
+    # Verify domain exists
+    domain = await db.mail_domains.find_one({"id": req.domain_id})
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    
+    # Validate email belongs to domain
+    email_domain = req.email.lower().split('@')[-1] if '@' in req.email else ''
+    if email_domain != domain["domain"]:
+        raise HTTPException(status_code=400, detail=f"Email must belong to domain '{domain['domain']}'")
+    
+    mail_id_doc = {
+        "id": str(uuid.uuid4()),
+        "email": req.email.lower(),
+        "domain_id": req.domain_id,
+        "project_id": domain["project_id"],
+        "seat_id": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.mail_ids.insert_one(mail_id_doc)
+    return MailIdResponse(**mail_id_doc)
+
+@api_router.get("/mail-ids", response_model=List[MailIdResponse])
+async def list_mail_ids(
+    project_id: Optional[str] = None, 
+    domain_id: Optional[str] = None,
+    seat_id: Optional[str] = None,
+    unassigned: Optional[bool] = None,
+    admin: dict = Depends(require_admin)
+):
+    """List mail IDs with optional filters"""
+    query = {}
+    if project_id:
+        query["project_id"] = project_id
+    if domain_id:
+        query["domain_id"] = domain_id
+    if seat_id:
+        query["seat_id"] = seat_id
+    if unassigned:
+        query["seat_id"] = None
+    
+    mail_ids = await db.mail_ids.find(query, {"_id": 0}).to_list(1000)
+    return [MailIdResponse(**m) for m in mail_ids]
+
+@api_router.get("/projects/{project_id}/mail-ids", response_model=List[MailIdResponse])
+async def get_project_mail_ids(project_id: str, user: dict = Depends(get_current_user)):
+    """Get all mail IDs for a project"""
+    if user["role"] not in ["admin", "super_admin"]:
+        assignment = await db.project_assignments.find_one({"project_id": project_id, "seat_id": user["id"]})
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Not assigned to this project")
+    
+    mail_ids = await db.mail_ids.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
+    return [MailIdResponse(**m) for m in mail_ids]
+
+@api_router.get("/seats/{seat_id}/mail-ids", response_model=List[MailIdResponse])
+async def get_seat_mail_ids(seat_id: str, user: dict = Depends(get_current_user)):
+    """Get mail IDs assigned to a seat"""
+    if user["role"] not in ["admin", "super_admin"] and user["id"] != seat_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    mail_ids = await db.mail_ids.find({"seat_id": seat_id}, {"_id": 0}).to_list(1000)
+    return [MailIdResponse(**m) for m in mail_ids]
+
+@api_router.put("/mail-ids/{mail_id_id}/assign")
+async def assign_mail_id_to_seat(mail_id_id: str, req: MailIdUpdate, admin: dict = Depends(require_admin)):
+    """Assign or unassign a mail ID to/from a seat"""
+    mail_id = await db.mail_ids.find_one({"id": mail_id_id})
+    if not mail_id:
+        raise HTTPException(status_code=404, detail="Mail ID not found")
+    
+    if req.seat_id:
+        # Verify seat exists
+        seat = await db.users.find_one({"id": req.seat_id, "role": "seat"})
+        if not seat:
+            raise HTTPException(status_code=404, detail="Seat not found")
+        
+        # Verify seat is assigned to the project
+        assignment = await db.project_assignments.find_one({
+            "project_id": mail_id["project_id"], 
+            "seat_id": req.seat_id
+        })
+        if not assignment:
+            raise HTTPException(status_code=400, detail="Seat is not assigned to this project")
+        
+        # Check if mail ID is already assigned to another seat
+        if mail_id.get("seat_id") and mail_id["seat_id"] != req.seat_id:
+            raise HTTPException(status_code=400, detail="Mail ID is already assigned to another seat")
+    
+    await db.mail_ids.update_one({"id": mail_id_id}, {"$set": {"seat_id": req.seat_id}})
+    return {"message": f"Mail ID {'assigned' if req.seat_id else 'unassigned'} successfully"}
+
+@api_router.delete("/mail-ids/{mail_id_id}")
+async def delete_mail_id(mail_id_id: str, admin: dict = Depends(require_admin)):
+    """Delete a mail ID"""
+    result = await db.mail_ids.delete_one({"id": mail_id_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Mail ID not found")
+    return {"message": "Mail ID deleted"}
 
 # ============== PROJECT ASSIGNMENTS ==============
 
