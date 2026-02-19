@@ -1007,6 +1007,9 @@ async def import_csv(
     imported = 0
     errors = []
     
+    # Check if simulation is active
+    simulation = await db.simulations.find_one({"status": "active"})
+    
     for i, row in enumerate(reader):
         try:
             prospect_data = {
@@ -1022,8 +1025,13 @@ async def import_csv(
                 "domain": row.get(column_mappings.get("domain", ""), ""),
                 "custom_fields": {},
                 "status": "new",
+                "assigned_mail_id": None,
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
+            
+            # Add simulation_id if simulation is active
+            if simulation:
+                prospect_data["simulation_id"] = simulation["id"]
             
             # Add any unmapped columns to custom_fields
             mapped_cols = set(column_mappings.values())
