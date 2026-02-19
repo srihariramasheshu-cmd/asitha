@@ -1,0 +1,30 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.14, pytest-9.0.2, pluggy-1.6.0 -- /root/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /app
+plugins: anyio-4.12.1
+collecting ... collected 21 items
+
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_01_admin_login PASSED [  4%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_02_end_any_existing_simulation PASSED [  9%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_03_start_simulation PASSED [ 14%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_04_verify_no_auto_prospects PASSED [ 19%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_05_sample_csv_download PASSED [ 23%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_06_get_simulation_project PASSED [ 28%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_07_simulation_seat_login PASSED [ 33%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_08_seat_sees_only_simulation_data PASSED [ 38%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_09_upload_prospects_csv PASSED [ 42%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_10_verify_uploaded_prospects PASSED [ 47%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_11_schedule_prospects_as_admin PASSED [ 52%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_12_verify_tasks_exist PASSED [ 57%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_13_task_status_update PASSED [ 61%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_14_add_note_to_prospect PASSED [ 66%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_15_get_prospect_notes PASSED [ 71%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_16_end_simulation PASSED [ 76%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_17_verify_cleanup PASSED [ 80%]
+backend/tests/test_simulation_workflow.py::TestSimulationWorkflow::test_18_real_data_visible PASSED [ 85%]
+backend/tests/test_simulation_workflow.py::TestFrontendAPICompatibility::test_01_setup PASSED [ 90%]
+backend/tests/test_simulation_workflow.py::TestFrontendAPICompatibility::test_02_task_status_update_endpoint PASSED [ 95%]
+backend/tests/test_simulation_workflow.py::TestFrontendAPICompatibility::test_03_notes_endpoint_mismatch PASSED [100%]
+
+============================== 21 passed in 5.02s ==============================
