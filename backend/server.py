@@ -1262,7 +1262,15 @@ async def get_calendar_tasks(
     user: dict = Depends(get_current_user)
 ):
     """Get tasks formatted for calendar view"""
-    query = {"send_date": {"$gte": start_date, "$lte": end_date}}
+    # Check if simulation is active
+    simulation = await db.simulations.find_one({"status": "active"})
+    sim_filter = {}
+    if simulation:
+        sim_filter["simulation_id"] = simulation["id"]
+    else:
+        sim_filter["simulation_id"] = {"$exists": False}
+    
+    query = {"send_date": {"$gte": start_date, "$lte": end_date}, **sim_filter}
     
     if user["role"] not in ["admin", "super_admin"]:
         query["seat_id"] = user["id"]
