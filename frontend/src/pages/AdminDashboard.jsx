@@ -426,32 +426,37 @@ export default function AdminDashboard() {
           
           {simulation?.data && (
             <div className="space-y-6 mt-4">
-              {/* Summary */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-zinc-800/50 rounded-sm p-4 text-center">
-                  <p className="font-chivo font-bold text-2xl text-emerald-400">{simulation.data.seats_count}</p>
-                  <p className="font-mono text-xs text-zinc-500">Seats</p>
-                </div>
-                <div className="bg-zinc-800/50 rounded-sm p-4 text-center">
-                  <p className="font-chivo font-bold text-2xl text-blue-400">{simulation.data.prospects_count}</p>
-                  <p className="font-mono text-xs text-zinc-500">Prospects</p>
-                </div>
-                <div className="bg-zinc-800/50 rounded-sm p-4 text-center">
-                  <p className="font-chivo font-bold text-2xl text-violet-400">{simulation.data.tasks_created}</p>
-                  <p className="font-mono text-xs text-zinc-500">Tasks</p>
-                </div>
+              {/* Instructions */}
+              <div className="bg-blue-600/10 border border-blue-600/30 rounded-sm p-4">
+                <p className="font-mono text-xs text-blue-400 font-bold mb-2">Simulation Workflow</p>
+                <ol className="font-mono text-xs text-blue-400/80 space-y-1 list-decimal list-inside">
+                  <li>Download sample CSV with prospect data</li>
+                  <li>Upload prospects to the simulation project</li>
+                  <li>Schedule prospects to create tasks</li>
+                  <li>Manage tasks - add notes, change status</li>
+                </ol>
               </div>
+
+              {/* Download Sample CSV */}
+              <a
+                href={`${API}/simulation/sample-csv`}
+                download="sample_prospects.csv"
+                className="flex items-center justify-center gap-2 w-full p-3 bg-emerald-600 hover:bg-emerald-500 rounded-sm text-white font-bold"
+              >
+                <FileSpreadsheet size={18} />
+                Download Sample Prospects CSV
+              </a>
 
               {/* Project Info */}
               <div className="bg-zinc-800/30 rounded-sm p-4">
-                <p className="font-mono text-xs text-zinc-500 mb-2 uppercase">Project</p>
+                <p className="font-mono text-xs text-zinc-500 mb-2 uppercase">Simulation Project</p>
                 <p className="text-white font-chivo">{simulation.data.project_name}</p>
-                <p className="font-mono text-xs text-zinc-400 mt-1">Domain: {simulation.data.domain}</p>
+                <p className="font-mono text-xs text-zinc-400 mt-1">Mail Domain: {simulation.data.domain}</p>
               </div>
 
               {/* Seats */}
               <div>
-                <p className="font-mono text-xs text-zinc-500 mb-3 uppercase">Simulated Seats</p>
+                <p className="font-mono text-xs text-zinc-500 mb-3 uppercase">Simulated Seats (Login as any)</p>
                 <div className="space-y-2">
                   {simulation.data.seats?.map((seat, i) => (
                     <div key={i} className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-sm">
@@ -472,9 +477,9 @@ export default function AdminDashboard() {
                 <div className="flex items-start gap-2">
                   <AlertCircle size={16} className="text-amber-400 mt-0.5" />
                   <div>
-                    <p className="font-mono text-xs text-amber-400 font-bold">Test Credentials</p>
+                    <p className="font-mono text-xs text-amber-400 font-bold">Seat Login Password</p>
                     <p className="font-mono text-xs text-amber-400/70 mt-1">
-                      All simulation seats use password: <code className="bg-zinc-800 px-1">simpass123</code>
+                      All simulation seats use: <code className="bg-zinc-800 px-1 rounded">simpass123</code>
                     </p>
                   </div>
                 </div>
@@ -482,7 +487,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          <DialogFooter className="mt-6">
+          <DialogFooter className="mt-6 gap-2">
             <Button 
               variant="outline" 
               onClick={() => setShowSimReport(false)} 
@@ -491,10 +496,11 @@ export default function AdminDashboard() {
               Close
             </Button>
             <Button
-              onClick={() => { navigate("/calendar"); setShowSimReport(false); }}
-              className="bg-blue-600 hover:bg-blue-500"
+              onClick={() => { navigate("/prospects"); setShowSimReport(false); }}
+              className="bg-emerald-600 hover:bg-emerald-500"
             >
-              View Calendar
+              <Upload size={16} className="mr-2" />
+              Upload Prospects
             </Button>
           </DialogFooter>
         </DialogContent>
