@@ -179,36 +179,76 @@ export default function AdminDashboard() {
     >
       {/* Simulation Banner */}
       {simulation?.active && (
-        <div className="mb-6 p-4 bg-amber-600/10 border border-amber-600/30 rounded-sm flex items-center justify-between animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-sm bg-amber-600/20 border border-amber-600/30 flex items-center justify-center animate-pulse">
-              <FlaskConical size={20} className="text-amber-400" />
+        <div className="mb-6 p-4 bg-amber-600/10 border border-amber-600/30 rounded-sm animate-fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-sm bg-amber-600/20 border border-amber-600/30 flex items-center justify-center animate-pulse">
+                <FlaskConical size={20} className="text-amber-400" />
+              </div>
+              <div>
+                <p className="font-chivo font-bold text-amber-400">Simulation Mode Active</p>
+                <p className="font-mono text-xs text-amber-400/70">
+                  Only simulation data is visible • Real data is hidden
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="font-chivo font-bold text-amber-400">Simulation Mode Active</p>
-              <p className="font-mono text-xs text-amber-400/70">
-                {simulation.data?.seats_count || 3} seats • {simulation.data?.prospects_count || 15} prospects • {simulation.data?.tasks_created || 60} tasks
-              </p>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => setShowSimReport(true)}
+                variant="outline"
+                size="sm"
+                className="border-amber-600/50 text-amber-400 hover:bg-amber-600/20"
+              >
+                View Details
+              </Button>
+              <Button
+                onClick={endSimulation}
+                disabled={simLoading}
+                size="sm"
+                className="bg-red-600 hover:bg-red-500 text-white"
+                data-testid="end-simulation-btn"
+              >
+                <Square size={14} className="mr-2" />
+                End Simulation
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={() => setShowSimReport(true)}
-              variant="outline"
-              size="sm"
-              className="border-amber-600/50 text-amber-400 hover:bg-amber-600/20"
+          {/* Quick Actions for Simulation */}
+          <div className="flex items-center gap-3 pt-3 border-t border-amber-600/20">
+            <a
+              href={`${API}/simulation/sample-csv`}
+              download="sample_prospects.csv"
+              className="inline-flex items-center px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 rounded text-amber-400 text-sm font-mono"
             >
-              View Details
+              <Download size={14} className="mr-2" />
+              Download Sample CSV
+            </a>
+            <Button
+              onClick={() => navigate("/prospects")}
+              size="sm"
+              variant="ghost"
+              className="text-amber-400 hover:bg-amber-600/20"
+            >
+              <Upload size={14} className="mr-2" />
+              Upload Prospects
             </Button>
             <Button
-              onClick={endSimulation}
-              disabled={simLoading}
+              onClick={() => navigate("/scheduling")}
               size="sm"
-              className="bg-red-600 hover:bg-red-500 text-white"
-              data-testid="end-simulation-btn"
+              variant="ghost"
+              className="text-amber-400 hover:bg-amber-600/20"
             >
-              <Square size={14} className="mr-2" />
-              End Simulation
+              <CalendarClock size={14} className="mr-2" />
+              Schedule Tasks
+            </Button>
+            <Button
+              onClick={() => navigate("/admin/task-management")}
+              size="sm"
+              variant="ghost"
+              className="text-amber-400 hover:bg-amber-600/20"
+            >
+              <CheckCircle size={14} className="mr-2" />
+              Manage Tasks
             </Button>
           </div>
         </div>
