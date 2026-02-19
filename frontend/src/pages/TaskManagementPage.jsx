@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -42,7 +43,10 @@ import {
   FolderKanban,
   CalendarIcon,
   Send,
-  CheckCircle
+  CheckCircle,
+  Edit,
+  MessageSquare,
+  Mail
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -73,6 +77,17 @@ export default function TaskManagementPage() {
   });
   const [sendDate, setSendDate] = useState(null);
   const [creating, setCreating] = useState(false);
+  
+  // Edit task modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [editStatus, setEditStatus] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  
+  // Notes
+  const [taskNotes, setTaskNotes] = useState([]);
+  const [newNote, setNewNote] = useState("");
 
   useEffect(() => {
     fetchData();
