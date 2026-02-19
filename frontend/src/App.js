@@ -220,6 +220,11 @@ function AppRoutes() {
           <TasksPage />
         </ProtectedRoute>
       } />
+      <Route path="/scheduling" element={
+        <ProtectedRoute>
+          <SchedulingPage />
+        </ProtectedRoute>
+      } />
       
       {/* Default redirects */}
       <Route path="/" element={<RootRedirect />} />
