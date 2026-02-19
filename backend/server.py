@@ -2182,7 +2182,7 @@ async def start_simulation(admin: dict = Depends(require_admin)):
         "summary": {
             "project_id": project_id,
             "project_name": "[SIM] Demo Outreach Campaign",
-            "domain": "simcompany.test",
+            "domain": "simcompany.demo",
             "seats_count": len(seats_data),
             "prospects_count": len(prospects_data),
             "tasks_created": tasks_created,
