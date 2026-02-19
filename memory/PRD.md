@@ -1,244 +1,200 @@
 # ABM Blinder - Product Requirements Document
 
 ## Original Problem Statement
-Develop "ABM Blinder," an internal application for managed outbound campaigns with hierarchical structure: Admin -> Project -> Seat -> Prospect -> Outreach. Users: 2 Admins (Global Control), 15 Seats (Project execution).
+Develop "ABM Blinder," an internal application for managed outbound campaigns with hierarchical structure: Admin -> Project -> Seat -> Prospect -> Outreach.
+
+## Business Rules (Updated Feb 19, 2026)
+- **Mail Domain/Mail ID Management:**
+  - Admin configures mail domains and mail IDs per project
+  - One domain can only be assigned to one project
+  - One mail ID can only be assigned to one seat
+  - A seat can have multiple mail IDs assigned
+
+- **Scheduler Configuration (per project):**
+  - Max mails per day per mail-ID
+  - Minimum time gap between mails from same mail-ID
+  - Random time jitter for natural delivery
+  - Number of touchpoints per sequence
+  - Gap in days between each touchpoint
+  - Work start/end time
+  - Working days (weekdays)
+
+- **Smart Scheduling Engine:**
+  - Round-robin mail ID assignment (same mail-ID for all touchpoints of a prospect)
+  - Respects all timing constraints (gaps, jitter, max mails/day)
+  - Schedules only during work hours on working days
+  - Spillover to next available date if day is full
+  - Reports prospects that can't be scheduled within 2 weeks
 
 ## User Personas
-1. **Super Admin (srihariramasheshu@gmail.com)** - Ultimate control with all powers:
-   - Create/manage admins and seats
-   - Create/edit/delete all projects
-   - Assign seats to any project
-   - Create tasks manually for any seat
-   - Schedule tasks with custom date/time
-   - View all user passwords
-   - View all activity logs
-   - Export all data
-2. **Admin** - Campaign control, creates projects, manages seats, uploads schedules, exports reports
-3. **Seat** - Executes outbound campaigns, uploads prospects, manages outreach sequences, logs sent emails and replies
+1. **Super Admin (srihariramasheshu@gmail.com)** - Ultimate control
+2. **Admin** - Campaign control, project/seat management
+3. **Seat** - Executes outbound campaigns, uploads prospects
 
-## Core Requirements (Static)
-- Self-signup with admin approval workflow
-- Super admin can do everything (full CRUD on projects, seats, tasks)
-- Admin can see all user passwords (captured during signup)
-- Activity logs visible to admins
-- Manual task creation for any seat
-- MongoDB database
-- CSV upload/download for prospects and schedules
-- No email integration - just task tracking/logging
-- Professional dark theme with readable fonts
-
-## Architecture
+## Technology Stack
 - **Backend**: FastAPI + MongoDB (Motor async driver)
 - **Frontend**: React + Tailwind CSS + Shadcn UI
 - **Auth**: JWT tokens with bcrypt password hashing
-- **Roles**: super_admin, admin, seat, pending
-- **Data Models**: Users, Projects, ProjectAssignments, Prospects, OutreachSteps, Tasks, ActivityLogs, Notes
 
-## What's Been Implemented (Feb 4, 2026)
+## What's Been Implemented
 
-### Backend (100% Complete)
-- User self-signup (accounts start as "pending")
-- Admin/Super Admin approval workflow
-- Role management (super_admin can promote to admin)
-- Password storage visible to admins
-- Project CRUD + seat assignments
-- **Project scheduling settings**: mails_per_domain_per_day, jitter_minutes
-- Prospect management with CSV upload/import (Form data with column mapping)
-- 4-step outreach sequence per prospect
-- **Manual task creation** for any seat by super admin
-- **Task deletion** by admin/super admin
-- Task scheduling system (CSV upload or manual)
-- **Schedule Lever** with smart scheduling:
-  - Domain-per-day limits to avoid spam filters
-  - Time jitter for natural delivery
-- **Task Update with sent_email_content** - Capture actual email content when marking as sent
-- **Notes CRUD** - Full CRUD for prospect notes
-- Activity logging (sent/reply tracking with email content)
-- CSV export for activity and prospects
-- Stats overview with pending users count
+### Phase 1: Mail Management & Smart Scheduling (Feb 19, 2026)
 
-### Frontend (100% Complete)
-- Login page with dark industrial theme
-- Signup page with pending approval notice
-- Super Admin Control Tower dashboard
-- Users & Approvals page (view passwords, approve users, change roles)
-- **Task Management page** - Create tasks for any seat with:
-  - Seat selection
-  - Project selection  
-  - Optional prospect linking
-  - Step number (1-5)
-  - Date picker
-  - Time picker
-  - Task description
-  - Filter by seat/project/status
-  - Delete tasks
-- Activity Logs page (filter by project/seat)
-- Projects management (create, view, assign seats)
-- Seats management (view active seats)
-- Prospects page with CSV upload + column mapping
-- Prospect detail with 4-step outreach editor
-- Tasks page for viewing all tasks
-- Schedule upload page with template download
-- Export page for activity and prospects
-- **Schedule Lever page** with:
-  - Project selection
-  - Start date/time picker
-  - Gap between steps slider
-  - **Advanced Scheduling section**:
-    - Mails per Domain/Day slider (1-50)
-    - Time Jitter slider (±0-60 min)
-  - Schedule preview
-  - Save as project default button
-- **Calendar Dashboard** with:
-  - Google Calendar-style task view
-  - Drag & drop rescheduling
-  - Color-coded tasks (blue=intro, violet=follow-up, green=sent)
-  - **Task Panel** with:
-    - Prospect details (company, contact, email)
-    - Task status and timestamps
-    - Sent email content display (if captured)
-    - **Prospect Notes section**:
-      - Add new note textarea
-      - Notes list with delete buttons
-      - Note author and date display
-    - **Mark as Sent modal**:
-      - Optional email content capture textarea
-      - Confirm sent button
+**Backend:**
+- [x] Mail Domain CRUD (POST/GET/DELETE /api/mail-domains)
+- [x] Mail ID CRUD (POST/GET/DELETE /api/mail-ids)
+- [x] Mail ID assignment to seats (PUT /api/mail-ids/{id}/assign)
+- [x] Enhanced project model with new scheduler fields:
+  - `max_mails_per_day_per_mail_id`
+  - `min_time_gap_minutes`
+  - `time_jitter_minutes`
+  - `touchpoints_count`
+  - `touchpoint_gaps[]`
+  - `work_start_time`, `work_end_time`
+  - `working_days[]`
+- [x] Config validation endpoint (POST /api/projects/{id}/check-config)
+- [x] Smart scheduling endpoint (POST /api/projects/{id}/schedule-prospects)
+- [x] Scheduling reports (GET /api/projects/{id}/scheduling-reports)
 
-## Default Credentials
-- Super Admin: srihariramasheshu@gmail.com / superadmin123
+**Frontend:**
+- [x] Mail Management page (/admin/mail-management)
+  - Add/delete mail domains
+  - Add/delete mail IDs
+  - Assign/unassign seats to mail IDs
+- [x] Scheduler Configuration page (/admin/schedule-lever)
+  - Max mails per day slider
+  - Min time gap slider
+  - Time jitter slider
+  - Touchpoints count slider
+  - Touchpoint gaps configuration
+  - Work hours inputs
+  - Working days selector
+- [x] Scheduling page (/scheduling)
+  - Config check status
+  - Schedule prospects button
+  - Scheduling history with detailed reports
 
-## Key Features
-1. **Super Admin Full Powers** - Create projects, seats, tasks, manage everything
-2. **Manual Task Creation** - Create tasks for any seat with date/time scheduling
-3. **Self-Signup with Approval** - Users signup, admin sees their password and approves
-4. **Activity Monitoring** - Admins see all seat activity logs
-5. **CSV Column Mapping** - Auto-detect + manual mapping of CSV headers
-6. **Task Distribution** - Admin uploads schedule CSV or creates tasks manually
-7. **Smart Scheduling (NEW)** - Domain limits and time jitter for natural delivery
-8. **Email Content Capture (NEW)** - Store sent email content for reference
-9. **Prospect Notes (NEW)** - Add notes to prospects for collaboration
+**Testing:**
+- All 28 backend tests passed (100%)
+- Round-robin mail assignment verified
+- Time constraints verified (gaps, jitter, work hours)
 
-## Prioritized Backlog
-### P0 (Complete)
-- [x] Self-signup with approval workflow
-- [x] Super admin full powers
-- [x] Manual task creation for any seat
-- [x] Task management page with filters
-- [x] Admin password visibility
-- [x] Activity logs for admins
-- [x] Project/Seat management
-- [x] CSV Import with Form data (fixed mappings bug)
-- [x] Smart scheduling with domain limits & jitter
-- [x] Email content capture on send
-- [x] Prospect notes CRUD
+### Previous Work (Prior Sessions)
+- User authentication with approval workflow
+- Project CRUD with seat assignments
+- Prospect management with CSV import
+- Calendar dashboard with drag-drop
+- Task management with status tracking
+- Activity logging
+- Notes system for prospects
 
-### P1 (Next Phase)
-- [ ] Email notifications for approval
-- [ ] Password reset functionality
-- [ ] Bulk task creation
-- [ ] In-app analytics for email sequence performance
+## Key API Endpoints
 
-### P2 (Future)
-- [ ] Email integration (optional)
-- [ ] Analytics dashboard with charts
-- [ ] Seat performance metrics
-- [ ] User notifications system
+### Mail Management (NEW)
+- `POST /api/mail-domains` - Create mail domain
+- `GET /api/mail-domains` - List all domains
+- `GET /api/projects/{id}/mail-domains` - Project domains
+- `DELETE /api/mail-domains/{id}` - Delete domain
 
-## API Endpoints
+- `POST /api/mail-ids` - Create mail ID
+- `GET /api/mail-ids` - List mail IDs
+- `PUT /api/mail-ids/{id}/assign` - Assign to seat
+- `DELETE /api/mail-ids/{id}` - Delete mail ID
 
-### Auth
-- `POST /api/auth/login` - User login
-- `POST /api/auth/signup` - User self-signup
-- `GET /api/auth/me` - Get current user
+### Scheduling (NEW)
+- `POST /api/projects/{id}/check-config` - Validate config
+- `POST /api/projects/{id}/schedule-prospects` - Run scheduler
+- `GET /api/projects/{id}/scheduling-reports` - Get reports
 
-### Users
-- `GET /api/users` - List all users (admin)
-- `GET /api/users/pending` - List pending users (admin)
-- `GET /api/users/seats` - List active seats (admin)
-- `PUT /api/users/{id}/approve` - Approve user (admin)
-- `PUT /api/users/{id}/role` - Update role (super_admin)
-- `DELETE /api/users/{id}` - Delete user (admin)
-
-### Projects
-- `GET /api/projects` - List projects
-- `POST /api/projects` - Create project (admin)
-- `GET /api/projects/{id}` - Get project
-- `PUT /api/projects/{id}` - Update project (includes scheduling settings)
-- `DELETE /api/projects/{id}` - Delete project
-
-### Prospects
-- `GET /api/prospects` - List prospects
-- `POST /api/prospects` - Create prospect
-- `POST /api/prospects/upload/parse` - Parse CSV headers
-- `POST /api/prospects/upload/import` - Import CSV with Form data
-
-### Tasks
-- `GET /api/tasks` - List tasks
-- `POST /api/tasks` - Create task (admin)
-- `GET /api/tasks/calendar` - Get calendar tasks
-- `POST /api/tasks/lever` - Apply schedule lever
-- `PUT /api/tasks/{id}` - Update task (includes sent_email_content)
-- `DELETE /api/tasks/{id}` - Delete task
-
-### Notes (NEW)
-- `POST /api/notes` - Create note
-- `GET /api/notes/prospect/{id}` - Get prospect notes
-- `PUT /api/notes/{id}` - Update note
-- `DELETE /api/notes/{id}` - Delete note
-
-### Activity & Export
-- `GET /api/activity-logs` - List activity logs
-- `GET /api/export/activity` - Export activity CSV
-- `GET /api/export/prospects` - Export prospects CSV
+### Existing Endpoints
+- Auth: `/api/auth/login`, `/api/auth/signup`, `/api/auth/me`
+- Users: `/api/users`, `/api/users/pending`, `/api/users/{id}/approve`
+- Projects: `/api/projects` CRUD
+- Prospects: `/api/prospects` CRUD, `/api/prospects/upload/import`
+- Tasks: `/api/tasks`, `/api/tasks/calendar`
+- Notes: `/api/notes`
+- Activity: `/api/activity-logs`
 
 ## Database Schema
 
-### New/Updated Collections
+### New Collections
 
-**projects** (updated):
+**mail_domains:**
 ```json
 {
   "id": "uuid",
-  "name": "string",
-  "description": "string",
-  "domains": ["string"],
-  "gap_days": "int",
-  "step_labels": ["string"],
-  "mails_per_domain_per_day": "int (default: 10)",
-  "jitter_minutes": "int (default: 0)",
+  "domain": "string (unique)",
+  "project_id": "uuid",
   "created_by": "uuid",
   "created_at": "datetime"
 }
 ```
 
-**tasks** (updated):
+**mail_ids:**
 ```json
 {
   "id": "uuid",
-  "prospect_id": "uuid (optional)",
-  "seat_id": "uuid",
+  "email": "string (unique)",
+  "domain_id": "uuid",
   "project_id": "uuid",
-  "step_number": "int",
-  "send_date": "string (YYYY-MM-DD)",
-  "send_time": "string (HH:MM)",
-  "status": "string",
-  "sent_timestamp": "datetime (optional)",
-  "sent_email_content": "string (optional, NEW)",
-  "description": "string",
+  "seat_id": "uuid (nullable)",
   "created_at": "datetime"
 }
 ```
 
-**notes** (NEW):
+**scheduling_reports:**
 ```json
 {
   "id": "uuid",
-  "prospect_id": "uuid",
-  "user_id": "uuid",
-  "user_name": "string",
-  "content": "string",
-  "created_at": "datetime",
-  "updated_at": "datetime"
+  "project_id": "uuid",
+  "seat_id": "uuid",
+  "total_prospects": "int",
+  "scheduled_prospects": "int",
+  "failed_prospects": "int",
+  "total_tasks_created": "int",
+  "report_data": "object",
+  "created_at": "datetime"
 }
 ```
+
+### Updated Collections
+
+**projects:** Added fields:
+- `max_mails_per_day_per_mail_id`
+- `min_time_gap_minutes`
+- `time_jitter_minutes`
+- `touchpoints_count`
+- `touchpoint_gaps[]`
+- `work_start_time`
+- `work_end_time`
+- `working_days[]`
+
+**prospects:** Added `assigned_mail_id`
+
+**tasks:** Added `assigned_mail_id`, `assigned_mail_email`
+
+## Prioritized Backlog
+
+### P0 (Complete)
+- [x] Mail domain/ID management
+- [x] Scheduler configuration
+- [x] Smart scheduling engine
+- [x] Scheduling reports
+
+### P1 (Next Phase)
+- [ ] Email template management per project
+- [ ] User notifications (account approval, etc.)
+- [ ] Analytics for email sequence performance
+
+### P2 (Future)
+- [ ] Bulk mail ID import
+- [ ] Analytics dashboard with charts
+- [ ] Email integration (actual sending)
+- [ ] Backend refactoring (modularize server.py)
+
+## Default Credentials
+- Super Admin: srihariramasheshu@gmail.com / superadmin123
+
+## Test Reports
+- /app/test_reports/iteration_4.json (Phase 1 - 28 tests passed)
+- /app/test_reports/iteration_3.json (Previous session)
