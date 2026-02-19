@@ -17,6 +17,7 @@ import ActivityLogsPage from "@/pages/ActivityLogsPage";
 import TaskManagementPage from "@/pages/TaskManagementPage";
 import CalendarDashboard from "@/pages/CalendarDashboard";
 import ScheduleLever from "@/pages/ScheduleLever";
+import MailManagementPage from "@/pages/MailManagementPage";
 import TasksPage from "@/pages/TasksPage";
 import ScheduleUploadPage from "@/pages/ScheduleUploadPage";
 import ExportPage from "@/pages/ExportPage";
