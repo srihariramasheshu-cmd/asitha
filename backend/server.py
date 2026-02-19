@@ -526,16 +526,26 @@ async def list_projects(user: dict = Depends(get_current_user)):
         assignments = await db.project_assignments.find({"seat_id": user["id"]}, {"_id": 0}).to_list(1000)
         project_ids = [a["project_id"] for a in assignments]
         projects = await db.projects.find({"id": {"$in": project_ids}}, {"_id": 0}).to_list(1000)
-    # Add defaults for existing projects
+    
+    # Add defaults for existing projects (migration support)
     for p in projects:
-        if "gap_days" not in p:
-            p["gap_days"] = 3
-        if "step_labels" not in p:
-            p["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
-        if "mails_per_domain_per_day" not in p:
-            p["mails_per_domain_per_day"] = 10
-        if "jitter_minutes" not in p:
-            p["jitter_minutes"] = 0
+        if "max_mails_per_day_per_mail_id" not in p:
+            p["max_mails_per_day_per_mail_id"] = 10
+        if "min_time_gap_minutes" not in p:
+            p["min_time_gap_minutes"] = 5
+        if "time_jitter_minutes" not in p:
+            p["time_jitter_minutes"] = 0
+        if "touchpoints_count" not in p:
+            p["touchpoints_count"] = 5
+        if "touchpoint_gaps" not in p:
+            p["touchpoint_gaps"] = [0, 3, 5, 7, 10]
+        if "work_start_time" not in p:
+            p["work_start_time"] = "09:00"
+        if "work_end_time" not in p:
+            p["work_end_time"] = "18:00"
+        if "working_days" not in p:
+            p["working_days"] = [1, 2, 3, 4, 5]
+    
     return [ProjectResponse(**p) for p in projects]
 
 @api_router.get("/projects/{project_id}", response_model=ProjectResponse)
