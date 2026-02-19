@@ -585,26 +585,38 @@ async def update_project(project_id: str, req: ProjectCreate, admin: dict = Depe
         {"id": project_id},
         {"$set": {
             "name": req.name, 
-            "description": req.description, 
-            "domains": req.domains,
-            "gap_days": req.gap_days,
-            "step_labels": req.step_labels,
-            "mails_per_domain_per_day": req.mails_per_domain_per_day,
-            "jitter_minutes": req.jitter_minutes
+            "description": req.description,
+            "max_mails_per_day_per_mail_id": req.max_mails_per_day_per_mail_id,
+            "min_time_gap_minutes": req.min_time_gap_minutes,
+            "time_jitter_minutes": req.time_jitter_minutes,
+            "touchpoints_count": req.touchpoints_count,
+            "touchpoint_gaps": req.touchpoint_gaps,
+            "work_start_time": req.work_start_time,
+            "work_end_time": req.work_end_time,
+            "working_days": req.working_days
         }}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
     
     project = await db.projects.find_one({"id": project_id}, {"_id": 0})
-    if "gap_days" not in project:
-        project["gap_days"] = 3
-    if "step_labels" not in project:
-        project["step_labels"] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
-    if "mails_per_domain_per_day" not in project:
-        project["mails_per_domain_per_day"] = 10
-    if "jitter_minutes" not in project:
-        project["jitter_minutes"] = 0
+    # Add defaults for migration
+    if "max_mails_per_day_per_mail_id" not in project:
+        project["max_mails_per_day_per_mail_id"] = 10
+    if "min_time_gap_minutes" not in project:
+        project["min_time_gap_minutes"] = 5
+    if "time_jitter_minutes" not in project:
+        project["time_jitter_minutes"] = 0
+    if "touchpoints_count" not in project:
+        project["touchpoints_count"] = 5
+    if "touchpoint_gaps" not in project:
+        project["touchpoint_gaps"] = [0, 3, 5, 7, 10]
+    if "work_start_time" not in project:
+        project["work_start_time"] = "09:00"
+    if "work_end_time" not in project:
+        project["work_end_time"] = "18:00"
+    if "working_days" not in project:
+        project["working_days"] = [1, 2, 3, 4, 5]
     return ProjectResponse(**project)
 
 @api_router.delete("/projects/{project_id}")
