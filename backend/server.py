@@ -151,12 +151,19 @@ class ProjectAssignment(BaseModel):
     project_id: str
     seat_id: str
 
-class ScheduleLeverRequest(BaseModel):
-    """Request to generate 5-step sequence for prospects"""
+# ============== SCHEDULING REPORT MODEL ==============
+
+class SchedulingReportResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
     project_id: str
-    start_date: str  # YYYY-MM-DD
-    start_time: str  # HH:MM
-    prospect_ids: Optional[List[str]] = None  # If None, apply to all prospects in project
+    seat_id: str
+    total_prospects: int
+    scheduled_prospects: int
+    failed_prospects: int
+    total_tasks_created: int
+    report_data: Dict[str, Any]
+    created_at: str
 
 class ProspectBase(BaseModel):
     company_name: str
