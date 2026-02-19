@@ -1576,6 +1576,9 @@ async def schedule_prospects(project_id: str, user: dict = Depends(get_current_u
                         "description": step_label,
                         "created_at": datetime.now(timezone.utc).isoformat()
                     }
+                    # Add simulation_id if prospect has one
+                    if prospect.get("simulation_id"):
+                        task_doc["simulation_id"] = prospect["simulation_id"]
                     prospect_tasks.append(task_doc)
                     slot_found = True
                     break
