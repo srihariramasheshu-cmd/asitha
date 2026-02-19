@@ -1213,7 +1213,15 @@ async def list_tasks(
     end_date: Optional[str] = None,
     user: dict = Depends(get_current_user)
 ):
-    query = {}
+    # Check if simulation is active
+    simulation = await db.simulations.find_one({"status": "active"})
+    sim_filter = {}
+    if simulation:
+        sim_filter["simulation_id"] = simulation["id"]
+    else:
+        sim_filter["simulation_id"] = {"$exists": False}
+    
+    query = {**sim_filter}
     if user["role"] not in ["admin", "super_admin"]:
         query["seat_id"] = user["id"]
     elif seat_id:
