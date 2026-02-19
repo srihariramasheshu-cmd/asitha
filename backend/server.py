@@ -866,6 +866,7 @@ async def create_prospect(req: ProspectCreate, user: dict = Depends(get_current_
         "domain": req.domain or "",
         "custom_fields": req.custom_fields or {},
         "status": "new",
+        "assigned_mail_id": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.prospects.insert_one(prospect_doc)
