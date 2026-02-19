@@ -1618,6 +1618,9 @@ async def schedule_prospects(project_id: str, user: dict = Depends(get_current_u
                 "last_task_date": prospect_tasks[-1]["send_date"]
             })
     
+    # Check if simulation is active for report
+    simulation = await db.simulations.find_one({"status": "active"})
+    
     # Create scheduling report
     report_doc = {
         "id": str(uuid.uuid4()),
@@ -1643,6 +1646,9 @@ async def schedule_prospects(project_id: str, user: dict = Depends(get_current_u
         },
         "created_at": datetime.now(timezone.utc).isoformat()
     }
+    # Add simulation_id if active
+    if simulation:
+        report_doc["simulation_id"] = simulation["id"]
     await db.scheduling_reports.insert_one(report_doc)
     
     return SchedulingReportResponse(**report_doc)
