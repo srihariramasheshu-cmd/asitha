@@ -6,6 +6,13 @@ import MainLayout from "@/components/layout/MainLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { 
   FolderKanban, 
   Users, 
@@ -19,7 +26,12 @@ import {
   UserCheck,
   Activity,
   Crown,
-  Shield
+  Shield,
+  Play,
+  Square,
+  FlaskConical,
+  AlertCircle,
+  CheckCircle
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,9 +42,15 @@ export default function AdminDashboard() {
   const [recentTasks, setRecentTasks] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Simulation state
+  const [simulation, setSimulation] = useState(null);
+  const [simLoading, setSimLoading] = useState(false);
+  const [showSimReport, setShowSimReport] = useState(false);
 
   useEffect(() => {
     fetchData();
+    checkSimulation();
   }, []);
 
   const fetchData = async () => {
@@ -49,6 +67,53 @@ export default function AdminDashboard() {
       toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkSimulation = async () => {
+    try {
+      const res = await axios.get(`${API}/simulation/status`);
+      if (res.data.active) {
+        setSimulation(res.data);
+      } else {
+        setSimulation(null);
+      }
+    } catch (error) {
+      console.error("Failed to check simulation status");
+    }
+  };
+
+  const startSimulation = async () => {
+    setSimLoading(true);
+    try {
+      const res = await axios.post(`${API}/simulation/start`);
+      toast.success(res.data.message);
+      setSimulation({
+        active: true,
+        simulation_id: res.data.simulation_id,
+        data: res.data.data
+      });
+      setShowSimReport(true);
+      fetchData(); // Refresh stats
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to start simulation");
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
+  const endSimulation = async () => {
+    setSimLoading(true);
+    try {
+      await axios.post(`${API}/simulation/end`);
+      toast.success("Simulation ended and data cleaned up!");
+      setSimulation(null);
+      setShowSimReport(false);
+      fetchData(); // Refresh stats
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to end simulation");
+    } finally {
+      setSimLoading(false);
     }
   };
 
