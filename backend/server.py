@@ -223,10 +223,11 @@ class TaskCreate(BaseModel):
     prospect_id: Optional[str] = None
     seat_id: str
     project_id: str
-    step_number: int = Field(ge=1, le=5)
+    step_number: int = Field(ge=1, le=10)
     send_date: str
     send_time: str
     description: Optional[str] = ""
+    assigned_mail_id: Optional[str] = None
 
 class TaskUpdate(BaseModel):
     status: Optional[str] = None
