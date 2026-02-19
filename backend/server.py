@@ -1877,6 +1877,363 @@ async def get_overview_stats(user: dict = Depends(get_current_user)):
         "replied": replied
     }
 
+# ============== SIMULATION MODE ==============
+
+class SimulationResponse(BaseModel):
+    simulation_id: str
+    status: str
+    message: str
+    data: Dict[str, Any]
+
+@api_router.get("/simulation/status")
+async def get_simulation_status(admin: dict = Depends(require_admin)):
+    """Check if a simulation is currently active"""
+    simulation = await db.simulations.find_one({"status": "active"}, {"_id": 0})
+    if simulation:
+        return {
+            "active": True,
+            "simulation_id": simulation["id"],
+            "created_at": simulation["created_at"],
+            "data": simulation.get("summary", {})
+        }
+    return {"active": False}
+
+@api_router.post("/simulation/start", response_model=SimulationResponse)
+async def start_simulation(admin: dict = Depends(require_admin)):
+    """
+    Start a test simulation that creates:
+    - 1 dummy project with full scheduler config
+    - 1 mail domain with 3 mail IDs
+    - 3 dummy seats (assigned to project)
+    - 5 prospects per seat (15 total)
+    - Auto-schedules all prospects
+    - Marks some tasks as sent
+    """
+    from datetime import timedelta
+    import random
+    
+    # Check if simulation already active
+    existing = await db.simulations.find_one({"status": "active"})
+    if existing:
+        raise HTTPException(status_code=400, detail="A simulation is already running. End it first.")
+    
+    simulation_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    
+    # ========== CREATE PROJECT ==========
+    project_id = str(uuid.uuid4())
+    project_doc = {
+        "id": project_id,
+        "name": "[SIM] Demo Outreach Campaign",
+        "description": "Simulation project for testing the complete workflow",
+        "max_mails_per_day_per_mail_id": 5,
+        "min_time_gap_minutes": 10,
+        "time_jitter_minutes": 5,
+        "touchpoints_count": 4,
+        "touchpoint_gaps": [0, 3, 7, 14],
+        "work_start_time": "09:00",
+        "work_end_time": "17:00",
+        "working_days": [1, 2, 3, 4, 5],
+        "simulation_id": simulation_id,
+        "created_by": admin["id"],
+        "created_at": now.isoformat()
+    }
+    await db.projects.insert_one(project_doc)
+    
+    # ========== CREATE MAIL DOMAIN ==========
+    domain_id = str(uuid.uuid4())
+    domain_doc = {
+        "id": domain_id,
+        "domain": "simcompany.test",
+        "project_id": project_id,
+        "simulation_id": simulation_id,
+        "created_by": admin["id"],
+        "created_at": now.isoformat()
+    }
+    await db.mail_domains.insert_one(domain_doc)
+    
+    # ========== CREATE MAIL IDS ==========
+    mail_ids_data = []
+    mail_emails = ["alice@simcompany.test", "bob@simcompany.test", "carol@simcompany.test"]
+    for email in mail_emails:
+        mail_id = str(uuid.uuid4())
+        mail_id_doc = {
+            "id": mail_id,
+            "email": email,
+            "domain_id": domain_id,
+            "project_id": project_id,
+            "seat_id": None,
+            "simulation_id": simulation_id,
+            "created_at": now.isoformat()
+        }
+        await db.mail_ids.insert_one(mail_id_doc)
+        mail_ids_data.append({"id": mail_id, "email": email})
+    
+    # ========== CREATE SEATS ==========
+    seats_data = []
+    seat_names = [
+        ("Alex Johnson", "alex.johnson@simcompany.test"),
+        ("Morgan Smith", "morgan.smith@simcompany.test"),
+        ("Taylor Brown", "taylor.brown@simcompany.test")
+    ]
+    
+    for i, (name, email) in enumerate(seat_names):
+        seat_id = str(uuid.uuid4())
+        seat_doc = {
+            "id": seat_id,
+            "email": email,
+            "name": name,
+            "role": "seat",
+            "status": "active",
+            "password_hash": hash_password("simpass123"),
+            "plain_password": "simpass123",
+            "simulation_id": simulation_id,
+            "created_at": now.isoformat()
+        }
+        await db.users.insert_one(seat_doc)
+        
+        # Assign seat to project
+        assignment_doc = {
+            "id": str(uuid.uuid4()),
+            "project_id": project_id,
+            "seat_id": seat_id,
+            "simulation_id": simulation_id,
+            "assigned_at": now.isoformat()
+        }
+        await db.project_assignments.insert_one(assignment_doc)
+        
+        # Assign mail ID to seat
+        await db.mail_ids.update_one(
+            {"id": mail_ids_data[i]["id"]},
+            {"$set": {"seat_id": seat_id}}
+        )
+        mail_ids_data[i]["seat_id"] = seat_id
+        
+        seats_data.append({
+            "id": seat_id,
+            "name": name,
+            "email": email,
+            "mail_id": mail_ids_data[i]["email"]
+        })
+    
+    # ========== CREATE PROSPECTS ==========
+    company_names = [
+        "Acme Corp", "TechVentures", "GlobalSoft", "DataDriven Inc", "CloudFirst",
+        "InnovateTech", "DigitalEdge", "SmartSolutions", "NextGen Systems", "FutureTech",
+        "AlphaWorks", "BetaSystems", "GammaLabs", "DeltaTech", "OmegaCorp"
+    ]
+    first_names = ["John", "Sarah", "Mike", "Emma", "David", "Lisa", "James", "Anna", "Chris", "Kate",
+                   "Tom", "Rachel", "Steve", "Linda", "Mark"]
+    last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Wilson", "Taylor",
+                  "Anderson", "Thomas", "Jackson", "White", "Harris"]
+    
+    prospects_data = []
+    prospect_index = 0
+    
+    for seat in seats_data:
+        for j in range(5):  # 5 prospects per seat
+            prospect_id = str(uuid.uuid4())
+            company = company_names[prospect_index]
+            first = first_names[prospect_index]
+            last = last_names[prospect_index]
+            
+            prospect_doc = {
+                "id": prospect_id,
+                "project_id": project_id,
+                "seat_id": seat["id"],
+                "company_name": company,
+                "contact_name": f"{first} {last}",
+                "email": f"{first.lower()}.{last.lower()}@{company.lower().replace(' ', '')}.com",
+                "phone": f"+1-555-{random.randint(100, 999)}-{random.randint(1000, 9999)}",
+                "linkedin": f"linkedin.com/in/{first.lower()}{last.lower()}",
+                "title": random.choice(["CEO", "CTO", "VP Sales", "Director", "Manager"]),
+                "domain": f"{company.lower().replace(' ', '')}.com",
+                "custom_fields": {},
+                "status": "new",
+                "assigned_mail_id": None,
+                "simulation_id": simulation_id,
+                "created_at": now.isoformat()
+            }
+            await db.prospects.insert_one(prospect_doc)
+            prospects_data.append({
+                "id": prospect_id,
+                "company": company,
+                "contact": f"{first} {last}",
+                "seat_id": seat["id"]
+            })
+            prospect_index += 1
+    
+    # ========== SCHEDULE PROSPECTS ==========
+    # Use the smart scheduling engine for each seat
+    tasks_created = 0
+    
+    for seat in seats_data:
+        seat_mail_id = next((m for m in mail_ids_data if m.get("seat_id") == seat["id"]), None)
+        if not seat_mail_id:
+            continue
+        
+        seat_prospects = [p for p in prospects_data if p["seat_id"] == seat["id"]]
+        start_date = now + timedelta(days=1)
+        
+        # Track schedule for this mail ID
+        mail_schedule = {}  # {date: [times]}
+        
+        for prospect in seat_prospects:
+            touchpoint_gaps = [0, 3, 7, 14]
+            
+            for tp_index in range(4):  # 4 touchpoints
+                if tp_index == 0:
+                    base_date = start_date
+                else:
+                    prev_task_date = datetime.strptime(prev_date, "%Y-%m-%d")
+                    base_date = prev_task_date + timedelta(days=touchpoint_gaps[tp_index])
+                
+                # Find working day
+                while base_date.isoweekday() > 5:  # Skip weekends
+                    base_date += timedelta(days=1)
+                
+                date_str = base_date.strftime("%Y-%m-%d")
+                
+                # Find available time slot
+                if date_str not in mail_schedule:
+                    mail_schedule[date_str] = []
+                
+                if len(mail_schedule[date_str]) >= 5:  # Max 5 per day
+                    base_date += timedelta(days=1)
+                    while base_date.isoweekday() > 5:
+                        base_date += timedelta(days=1)
+                    date_str = base_date.strftime("%Y-%m-%d")
+                    mail_schedule[date_str] = []
+                
+                # Calculate time
+                slot_count = len(mail_schedule[date_str])
+                hour = 9 + (slot_count * 10 // 60)
+                minute = (slot_count * 10) % 60 + random.randint(0, 5)
+                time_str = f"{hour:02d}:{minute:02d}"
+                mail_schedule[date_str].append(time_str)
+                
+                task_doc = {
+                    "id": str(uuid.uuid4()),
+                    "prospect_id": prospect["id"],
+                    "seat_id": seat["id"],
+                    "project_id": project_id,
+                    "step_number": tp_index + 1,
+                    "send_date": date_str,
+                    "send_time": time_str,
+                    "status": "pending",
+                    "sent_timestamp": None,
+                    "sent_email_content": None,
+                    "assigned_mail_id": seat_mail_id["id"],
+                    "description": "Intro Email" if tp_index == 0 else f"Follow-up {tp_index}",
+                    "simulation_id": simulation_id,
+                    "created_at": now.isoformat()
+                }
+                await db.tasks.insert_one(task_doc)
+                tasks_created += 1
+                prev_date = date_str
+            
+            # Update prospect with assigned mail ID
+            await db.prospects.update_one(
+                {"id": prospect["id"]},
+                {"$set": {"assigned_mail_id": seat_mail_id["id"]}}
+            )
+    
+    # ========== MARK SOME TASKS AS SENT ==========
+    # Mark ~30% of intro emails as sent
+    intro_tasks = await db.tasks.find({
+        "simulation_id": simulation_id,
+        "step_number": 1
+    }, {"_id": 0}).to_list(100)
+    
+    tasks_sent = 0
+    for task in intro_tasks[:5]:  # Mark first 5 intro emails as sent
+        sent_time = now - timedelta(hours=random.randint(1, 24))
+        await db.tasks.update_one(
+            {"id": task["id"]},
+            {"$set": {
+                "status": "sent",
+                "sent_timestamp": sent_time.isoformat(),
+                "sent_email_content": f"Hi {random.choice(first_names)},\n\nI hope this email finds you well. I wanted to reach out about...\n\nBest regards,\n{random.choice([s['name'] for s in seats_data])}"
+            }}
+        )
+        tasks_sent += 1
+        
+        # Log activity
+        log_doc = {
+            "id": str(uuid.uuid4()),
+            "task_id": task["id"],
+            "prospect_id": task["prospect_id"],
+            "seat_id": task["seat_id"],
+            "project_id": project_id,
+            "action": "sent",
+            "details": {"sent_timestamp": sent_time.isoformat()},
+            "simulation_id": simulation_id,
+            "timestamp": sent_time.isoformat()
+        }
+        await db.activity_logs.insert_one(log_doc)
+    
+    # ========== SAVE SIMULATION RECORD ==========
+    simulation_doc = {
+        "id": simulation_id,
+        "status": "active",
+        "created_by": admin["id"],
+        "created_at": now.isoformat(),
+        "summary": {
+            "project_id": project_id,
+            "project_name": "[SIM] Demo Outreach Campaign",
+            "domain": "simcompany.test",
+            "seats_count": len(seats_data),
+            "prospects_count": len(prospects_data),
+            "tasks_created": tasks_created,
+            "tasks_sent": tasks_sent,
+            "seats": seats_data
+        }
+    }
+    await db.simulations.insert_one(simulation_doc)
+    
+    return SimulationResponse(
+        simulation_id=simulation_id,
+        status="active",
+        message=f"Simulation started! Created {len(seats_data)} seats, {len(prospects_data)} prospects, and {tasks_created} tasks.",
+        data=simulation_doc["summary"]
+    )
+
+@api_router.post("/simulation/end")
+async def end_simulation(admin: dict = Depends(require_admin)):
+    """End the active simulation and clean up all simulation data"""
+    
+    simulation = await db.simulations.find_one({"status": "active"})
+    if not simulation:
+        raise HTTPException(status_code=404, detail="No active simulation found")
+    
+    simulation_id = simulation["id"]
+    
+    # Delete all simulation data
+    deleted_counts = {
+        "tasks": (await db.tasks.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "prospects": (await db.prospects.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "activity_logs": (await db.activity_logs.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "notes": (await db.notes.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "scheduling_reports": (await db.scheduling_reports.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "project_assignments": (await db.project_assignments.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "mail_ids": (await db.mail_ids.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "mail_domains": (await db.mail_domains.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "users": (await db.users.delete_many({"simulation_id": simulation_id})).deleted_count,
+        "projects": (await db.projects.delete_many({"simulation_id": simulation_id})).deleted_count,
+    }
+    
+    # Mark simulation as ended
+    await db.simulations.update_one(
+        {"id": simulation_id},
+        {"$set": {"status": "ended", "ended_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {
+        "message": "Simulation ended and all data cleaned up",
+        "simulation_id": simulation_id,
+        "deleted": deleted_counts
+    }
+
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/")
