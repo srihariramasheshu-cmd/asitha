@@ -30,8 +30,20 @@ export default function Login() {
       });
       navigate(["admin", "super_admin"].includes(loggedUser.role) ? "/admin" : "/dashboard");
     } catch (error) {
+      let errorMessage = "Invalid credentials";
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        if (typeof detail === 'string') {
+          errorMessage = detail;
+        } else if (Array.isArray(detail)) {
+          // Pydantic validation errors
+          errorMessage = detail.map(e => e.msg || e).join(', ');
+        } else if (typeof detail === 'object' && detail.msg) {
+          errorMessage = detail.msg;
+        }
+      }
       toast.error("Login failed", {
-        description: error.response?.data?.detail || "Invalid credentials",
+        description: errorMessage,
       });
     } finally {
       setLoading(false);
