@@ -172,10 +172,10 @@ export default function TaskManagementPage() {
     setEditStatus(task.status);
     setEditNote("");
     
-    // Fetch notes for the prospect
+    // Fetch notes for the prospect using correct endpoint: GET /api/notes/prospect/{id}
     if (task.prospect_id) {
       try {
-        const res = await axios.get(`${API}/prospects/${task.prospect_id}/notes`);
+        const res = await axios.get(`${API}/notes/prospect/${task.prospect_id}`);
         setTaskNotes(res.data);
       } catch {
         setTaskNotes([]);
@@ -190,7 +190,8 @@ export default function TaskManagementPage() {
   const handleSaveTaskStatus = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API}/tasks/${editingTask.id}/status`, {
+      // Use PUT /api/tasks/{id} with status in body (not /status endpoint)
+      await axios.put(`${API}/tasks/${editingTask.id}`, {
         status: editStatus
       });
       toast.success("Task status updated");
@@ -211,13 +212,15 @@ export default function TaskManagementPage() {
     
     setSaving(true);
     try {
-      await axios.post(`${API}/prospects/${editingTask.prospect_id}/notes`, {
+      // Use correct endpoint: POST /api/notes with prospect_id in body
+      await axios.post(`${API}/notes`, {
+        prospect_id: editingTask.prospect_id,
         content: newNote
       });
       toast.success("Note added");
       setNewNote("");
-      // Refresh notes
-      const res = await axios.get(`${API}/prospects/${editingTask.prospect_id}/notes`);
+      // Refresh notes using correct endpoint: GET /api/notes/prospect/{id}
+      const res = await axios.get(`${API}/notes/prospect/${editingTask.prospect_id}`);
       setTaskNotes(res.data);
     } catch (error) {
       toast.error("Failed to add note");
@@ -230,7 +233,8 @@ export default function TaskManagementPage() {
     try {
       await axios.delete(`${API}/notes/${noteId}`);
       toast.success("Note deleted");
-      const res = await axios.get(`${API}/prospects/${editingTask.prospect_id}/notes`);
+      // Use correct endpoint to refresh: GET /api/notes/prospect/{id}
+      const res = await axios.get(`${API}/notes/prospect/${editingTask.prospect_id}`);
       setTaskNotes(res.data);
     } catch (error) {
       toast.error("Failed to delete note");
