@@ -113,6 +113,11 @@ Develop "ABM Blinder," an internal application for managed outbound campaigns wi
 
 ## Key API Endpoints
 
+### Simulation Mode (NEW)
+- `GET /api/simulation/status` - Check if simulation active
+- `POST /api/simulation/start` - Start simulation with dummy data
+- `POST /api/simulation/end` - End simulation and cleanup
+
 ### Mail Management (NEW)
 - `POST /api/mail-domains` - Create mail domain
 - `GET /api/mail-domains` - List all domains
