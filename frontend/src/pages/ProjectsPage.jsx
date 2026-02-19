@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,9 @@ import {
   ArrowRight,
   Trash2,
   Settings,
-  X
+  X,
+  Mail,
+  Calendar
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,7 +36,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newProject, setNewProject] = useState({ name: "", description: "", domains: "" });
+  const [newProject, setNewProject] = useState({ name: "", description: "" });
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -55,20 +58,14 @@ export default function ProjectsPage() {
     e.preventDefault();
     setCreating(true);
     try {
-      const domains = newProject.domains
-        .split(",")
-        .map(d => d.trim())
-        .filter(d => d);
-      
       await axios.post(`${API}/projects`, {
         name: newProject.name,
-        description: newProject.description,
-        domains
+        description: newProject.description
       });
       
       toast.success("Project created successfully");
       setShowCreateModal(false);
-      setNewProject({ name: "", description: "", domains: "" });
+      setNewProject({ name: "", description: "" });
       fetchProjects();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to create project");
@@ -89,6 +86,8 @@ export default function ProjectsPage() {
     }
   };
 
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+
   if (loading) {
     return (
       <MainLayout title="Projects">
@@ -102,9 +101,9 @@ export default function ProjectsPage() {
   return (
     <MainLayout 
       title="Projects"
-      subtitle={`${projects.length} ${user?.role === "admin" ? "total" : "assigned"} projects`}
+      subtitle={`${projects.length} ${isAdmin ? "total" : "assigned"} projects`}
       actions={
-        user?.role === "admin" && (
+        isAdmin && (
           <Button
             onClick={() => setShowCreateModal(true)}
             data-testid="create-project-btn"
@@ -121,7 +120,7 @@ export default function ProjectsPage() {
           <FolderKanban size={48} className="mx-auto text-zinc-600 mb-4" strokeWidth={1} />
           <p className="font-manrope text-zinc-400 text-lg">No projects yet</p>
           <p className="font-mono text-xs text-zinc-600 mt-2">
-            {user?.role === "admin" 
+            {isAdmin 
               ? "Create your first project to get started" 
               : "You haven't been assigned to any projects"}
           </p>
@@ -138,7 +137,7 @@ export default function ProjectsPage() {
                 <div className="w-10 h-10 rounded-sm bg-blue-600/10 border border-blue-600/20 flex items-center justify-center">
                   <FolderKanban size={20} className="text-blue-500" strokeWidth={1.5} />
                 </div>
-                {user?.role === "admin" && (
+                {isAdmin && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -160,23 +159,17 @@ export default function ProjectsPage() {
                 </p>
               )}
 
-              {project.domains.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {project.domains.slice(0, 3).map((domain) => (
-                    <span
-                      key={domain}
-                      className="font-mono text-[10px] px-2 py-0.5 rounded-sm bg-zinc-800 text-zinc-400"
-                    >
-                      {domain}
-                    </span>
-                  ))}
-                  {project.domains.length > 3 && (
-                    <span className="font-mono text-[10px] text-zinc-500">
-                      +{project.domains.length - 3} more
-                    </span>
-                  )}
-                </div>
-              )}
+              {/* Scheduler Config Summary */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
+                  <Calendar size={10} className="mr-1" />
+                  {project.touchpoints_count || 5} touchpoints
+                </Badge>
+                <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
+                  <Mail size={10} className="mr-1" />
+                  {project.max_mails_per_day_per_mail_id || 10}/day
+                </Badge>
+              </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
                 <span className="font-mono text-[10px] text-zinc-500">
@@ -235,18 +228,9 @@ export default function ProjectsPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                Sending Domains (comma separated)
-              </Label>
-              <Input
-                value={newProject.domains}
-                onChange={(e) => setNewProject({ ...newProject, domains: e.target.value })}
-                data-testid="project-domains-input"
-                placeholder="company1.com, company2.io"
-                className="bg-zinc-950 border-zinc-800 rounded-sm font-mono"
-              />
-            </div>
+            <p className="font-mono text-xs text-zinc-500">
+              After creating the project, configure mail domains in Mail Management and scheduler settings in Scheduler Config.
+            </p>
 
             <DialogFooter className="gap-2 mt-6">
               <Button
