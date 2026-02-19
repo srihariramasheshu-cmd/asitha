@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,10 @@ import {
   Plus,
   Trash2,
   Upload,
-  Globe
+  Globe,
+  Mail,
+  Settings,
+  Calendar
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,10 +45,14 @@ export default function ProjectDetailPage() {
   const [assignedSeats, setAssignedSeats] = useState([]);
   const [availableSeats, setAvailableSeats] = useState([]);
   const [prospects, setProspects] = useState([]);
+  const [mailDomains, setMailDomains] = useState([]);
+  const [mailIds, setMailIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState("");
   const [assigning, setAssigning] = useState(false);
+
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
 
   useEffect(() => {
     fetchData();
@@ -60,7 +68,20 @@ export default function ProjectDetailPage() {
       setProject(projectRes.data);
       setProspects(prospectsRes.data);
 
-      if (user?.role === "admin") {
+      // Fetch mail domains and IDs
+      try {
+        const [domainsRes, mailIdsRes] = await Promise.all([
+          axios.get(`${API}/projects/${projectId}/mail-domains`),
+          axios.get(`${API}/projects/${projectId}/mail-ids`)
+        ]);
+        setMailDomains(domainsRes.data);
+        setMailIds(mailIdsRes.data);
+      } catch {
+        setMailDomains([]);
+        setMailIds([]);
+      }
+
+      if (isAdmin) {
         const [seatsRes, allSeatsRes] = await Promise.all([
           axios.get(`${API}/projects/${projectId}/seats`),
           axios.get(`${API}/users/seats`)
@@ -134,7 +155,7 @@ export default function ProjectDetailPage() {
       }
     >
       {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-sm bg-blue-600/10 border border-blue-600/20 flex items-center justify-center">
@@ -151,7 +172,7 @@ export default function ProjectDetailPage() {
           </div>
         </Card>
 
-        {user?.role === "admin" && (
+        {isAdmin && (
           <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-sm bg-emerald-600/10 border border-emerald-600/20 flex items-center justify-center">
@@ -176,19 +197,73 @@ export default function ProjectDetailPage() {
             </div>
             <div>
               <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                Sending Domains
+                Mail Domains
               </p>
               <p className="font-chivo font-bold text-2xl text-white mt-1">
-                {project.domains.length}
+                {mailDomains.length}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-sm bg-amber-600/10 border border-amber-600/20 flex items-center justify-center">
+              <Mail size={24} className="text-amber-500" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                Mail IDs
+              </p>
+              <p className="font-chivo font-bold text-2xl text-white mt-1">
+                {mailIds.length}
               </p>
             </div>
           </div>
         </Card>
       </div>
 
+      {/* Scheduler Config Summary */}
+      <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-chivo font-bold text-lg text-white flex items-center gap-2">
+            <Settings size={18} className="text-zinc-400" />
+            Scheduler Configuration
+          </h3>
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/admin/schedule-lever")}
+              className="border-zinc-700 text-zinc-300"
+            >
+              Configure
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <p className="font-mono text-[10px] text-zinc-500 uppercase">Touchpoints</p>
+            <p className="font-chivo font-bold text-lg text-white">{project.touchpoints_count || 5}</p>
+          </div>
+          <div>
+            <p className="font-mono text-[10px] text-zinc-500 uppercase">Max Mails/Day</p>
+            <p className="font-chivo font-bold text-lg text-white">{project.max_mails_per_day_per_mail_id || 10}</p>
+          </div>
+          <div>
+            <p className="font-mono text-[10px] text-zinc-500 uppercase">Work Hours</p>
+            <p className="font-chivo font-bold text-lg text-white">{project.work_start_time || "09:00"} - {project.work_end_time || "18:00"}</p>
+          </div>
+          <div>
+            <p className="font-mono text-[10px] text-zinc-500 uppercase">Time Gap</p>
+            <p className="font-chivo font-bold text-lg text-white">{project.min_time_gap_minutes || 5} min</p>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Assigned Seats (Admin Only) */}
-        {user?.role === "admin" && (
+        {isAdmin && (
           <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-chivo font-bold text-lg text-white">Assigned Seats</h3>
@@ -241,28 +316,67 @@ export default function ProjectDetailPage() {
           </Card>
         )}
 
-        {/* Sending Domains */}
+        {/* Mail Domains & IDs */}
         <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
-          <h3 className="font-chivo font-bold text-lg text-white mb-4">Sending Domains</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-chivo font-bold text-lg text-white">Mail Configuration</h3>
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => navigate("/admin/mail-management")}
+                className="border-zinc-700 text-zinc-300"
+              >
+                Manage
+              </Button>
+            )}
+          </div>
           
-          {project.domains.length === 0 ? (
+          {mailDomains.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-zinc-500">
               <Globe size={32} strokeWidth={1} className="mb-2" />
-              <p className="font-mono text-sm">No domains configured</p>
+              <p className="font-mono text-sm">No mail domains configured</p>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="link"
+                  onClick={() => navigate("/admin/mail-management")}
+                  className="text-blue-400 mt-2"
+                >
+                  Configure Mail Domains
+                </Button>
+              )}
             </div>
           ) : (
-            <div className="space-y-2">
-              {project.domains.map((domain) => (
-                <div
-                  key={domain}
-                  className="flex items-center gap-3 p-3 bg-zinc-800/50 rounded-sm border border-zinc-800"
-                >
-                  <div className="w-8 h-8 rounded-sm bg-violet-600/10 border border-violet-600/20 flex items-center justify-center">
-                    <Globe size={14} className="text-violet-500" />
+            <div className="space-y-3">
+              {mailDomains.map((domain) => {
+                const domainMailIds = mailIds.filter(m => m.domain_id === domain.id);
+                return (
+                  <div key={domain.id} className="p-3 bg-zinc-800/50 rounded-sm border border-zinc-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Globe size={14} className="text-violet-500" />
+                      <span className="font-mono text-sm text-white">{domain.domain}</span>
+                      <Badge variant="outline" className="text-[10px] border-zinc-600 text-zinc-400 ml-auto">
+                        {domainMailIds.length} mail IDs
+                      </Badge>
+                    </div>
+                    {domainMailIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {domainMailIds.slice(0, 3).map((mailId) => (
+                          <Badge key={mailId.id} className="text-[10px] bg-zinc-700 text-zinc-300">
+                            {mailId.email.split('@')[0]}
+                          </Badge>
+                        ))}
+                        {domainMailIds.length > 3 && (
+                          <Badge className="text-[10px] bg-zinc-700 text-zinc-400">
+                            +{domainMailIds.length - 3} more
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <span className="font-mono text-sm text-zinc-300">{domain}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>
