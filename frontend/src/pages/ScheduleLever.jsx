@@ -6,8 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -15,51 +15,71 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { format, addDays } from "date-fns";
 import { 
-  Zap, 
-  CalendarIcon,
+  Settings, 
   Clock,
-  ArrowRight,
   CheckCircle,
   AlertCircle,
-  Target,
-  Settings
+  Save,
+  CalendarDays,
+  Mail,
+  Timer
 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ScheduleLever() {
   const [projects, setProjects] = useState([]);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [prospectsCount, setProspectsCount] = useState(0);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [applying, setApplying] = useState(false);
+  const [saving, setSaving] = useState(false);
   
-  // Lever settings
-  const [startDate, setStartDate] = useState(null);
-  const [startTime, setStartTime] = useState("09:00");
-  const [gapDays, setGapDays] = useState(3);
-  const [mailsPerDomainPerDay, setMailsPerDomainPerDay] = useState(10);
-  const [jitterMinutes, setJitterMinutes] = useState(0);
-  const [result, setResult] = useState(null);
+  // Project config state
+  const [config, setConfig] = useState({
+    name: "",
+    description: "",
+    max_mails_per_day_per_mail_id: 10,
+    min_time_gap_minutes: 5,
+    time_jitter_minutes: 0,
+    touchpoints_count: 5,
+    touchpoint_gaps: [0, 3, 5, 7, 10],
+    work_start_time: "09:00",
+    work_end_time: "18:00",
+    working_days: [1, 2, 3, 4, 5]
+  });
+
+  const weekDays = [
+    { value: 1, label: "Mon" },
+    { value: 2, label: "Tue" },
+    { value: 3, label: "Wed" },
+    { value: 4, label: "Thu" },
+    { value: 5, label: "Fri" },
+    { value: 6, label: "Sat" },
+    { value: 7, label: "Sun" }
+  ];
 
   useEffect(() => {
     fetchProjects();
   }, []);
 
   useEffect(() => {
-    if (selectedProject) {
-      fetchProspectsCount(selectedProject);
-      // Set settings from project
-      const project = projects.find(p => p.id === selectedProject);
+    if (selectedProjectId) {
+      const project = projects.find(p => p.id === selectedProjectId);
       if (project) {
-        setGapDays(project.gap_days || 3);
-        setMailsPerDomainPerDay(project.mails_per_domain_per_day || 10);
-        setJitterMinutes(project.jitter_minutes || 0);
+        setConfig({
+          name: project.name,
+          description: project.description || "",
+          max_mails_per_day_per_mail_id: project.max_mails_per_day_per_mail_id || 10,
+          min_time_gap_minutes: project.min_time_gap_minutes || 5,
+          time_jitter_minutes: project.time_jitter_minutes || 0,
+          touchpoints_count: project.touchpoints_count || 5,
+          touchpoint_gaps: project.touchpoint_gaps || [0, 3, 5, 7, 10],
+          work_start_time: project.work_start_time || "09:00",
+          work_end_time: project.work_end_time || "18:00",
+          working_days: project.working_days || [1, 2, 3, 4, 5]
+        });
       }
     }
-  }, [selectedProject, projects]);
+  }, [selectedProjectId, projects]);
 
   const fetchProjects = async () => {
     try {
@@ -72,78 +92,54 @@ export default function ScheduleLever() {
     }
   };
 
-  const fetchProspectsCount = async (projectId) => {
-    try {
-      const res = await axios.get(`${API}/prospects?project_id=${projectId}`);
-      setProspectsCount(res.data.length);
-    } catch (error) {
-      setProspectsCount(0);
-    }
-  };
-
-  const handleApplyLever = async () => {
-    if (!selectedProject || !startDate) {
-      toast.error("Please select a project and start date");
+  const handleSaveConfig = async () => {
+    if (!selectedProjectId) {
+      toast.error("Please select a project");
       return;
     }
 
-    if (prospectsCount === 0) {
-      toast.error("No prospects in this project to schedule");
-      return;
-    }
-
-    setApplying(true);
-    setResult(null);
-
+    setSaving(true);
     try {
-      const res = await axios.post(`${API}/tasks/lever`, {
-        project_id: selectedProject,
-        start_date: format(startDate, 'yyyy-MM-dd'),
-        start_time: startTime
-      });
-      
-      setResult(res.data);
-      toast.success(`Generated ${res.data.tasks_count} tasks!`);
-    } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to apply schedule");
-    } finally {
-      setApplying(false);
-    }
-  };
-
-  const updateProjectSettings = async () => {
-    if (!selectedProject) return;
-    
-    try {
-      const project = projects.find(p => p.id === selectedProject);
-      await axios.put(`${API}/projects/${selectedProject}`, {
-        ...project,
-        gap_days: gapDays,
-        mails_per_domain_per_day: mailsPerDomainPerDay,
-        jitter_minutes: jitterMinutes
-      });
-      toast.success("Project settings updated");
+      await axios.put(`${API}/projects/${selectedProjectId}`, config);
+      toast.success("Project configuration saved!");
       fetchProjects();
     } catch (error) {
-      toast.error("Failed to update settings");
+      toast.error(error.response?.data?.detail || "Failed to save configuration");
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Preview dates
-  const getPreviewDates = () => {
-    if (!startDate) return [];
-    const dates = [];
-    for (let i = 0; i < 5; i++) {
-      dates.push(addDays(startDate, i * gapDays));
-    }
-    return dates;
+  const handleTouchpointGapChange = (index, value) => {
+    const newGaps = [...config.touchpoint_gaps];
+    newGaps[index] = parseInt(value) || 0;
+    setConfig({ ...config, touchpoint_gaps: newGaps });
   };
 
-  const previewDates = getPreviewDates();
+  const handleTouchpointsCountChange = (count) => {
+    const newCount = parseInt(count);
+    const newGaps = [...config.touchpoint_gaps];
+    
+    // Expand or shrink gaps array
+    while (newGaps.length < newCount) {
+      const lastGap = newGaps[newGaps.length - 1] || 0;
+      newGaps.push(lastGap + 3);
+    }
+    newGaps.length = newCount;
+    
+    setConfig({ ...config, touchpoints_count: newCount, touchpoint_gaps: newGaps });
+  };
+
+  const toggleWorkingDay = (day) => {
+    const newDays = config.working_days.includes(day)
+      ? config.working_days.filter(d => d !== day)
+      : [...config.working_days, day].sort((a, b) => a - b);
+    setConfig({ ...config, working_days: newDays });
+  };
 
   if (loading) {
     return (
-      <MainLayout title="Schedule Lever">
+      <MainLayout title="Scheduler Configuration">
         <div className="flex items-center justify-center h-64">
           <p className="font-mono text-zinc-500">Loading...</p>
         </div>
@@ -153,277 +149,309 @@ export default function ScheduleLever() {
 
   return (
     <MainLayout 
-      title="Schedule Lever"
-      subtitle="Auto-generate 5-step sequences for all prospects"
+      title="Scheduler Configuration"
+      subtitle="Configure email scheduling rules for your projects"
     >
-      <div className="max-w-4xl">
-        {/* Main Control Panel */}
-        <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6 mb-6">
+      <div className="max-w-4xl space-y-6">
+        {/* Project Selection */}
+        <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-sm bg-blue-600/10 border border-blue-600/20 flex items-center justify-center">
-              <Zap size={24} className="text-blue-500" />
+              <Settings size={24} className="text-blue-500" />
             </div>
             <div>
-              <h3 className="font-chivo font-bold text-lg text-white">The Lever</h3>
+              <h3 className="font-chivo font-bold text-lg text-white">Project Settings</h3>
               <p className="font-mono text-xs text-zinc-500">
-                Set intro date + gap → Generate all follow-ups automatically
+                Select a project to configure its scheduling rules
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Project Selection */}
-            <div className="space-y-2">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                Select Project
-              </Label>
-              <Select value={selectedProject || "select"} onValueChange={(val) => setSelectedProject(val === "select" ? null : val)}>
-                <SelectTrigger className="bg-zinc-950 border-zinc-800 rounded-sm h-12">
-                  <SelectValue placeholder="Choose a project..." />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800">
-                  <SelectItem value="select" disabled>Choose a project...</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedProject && (
-                <p className="font-mono text-xs text-zinc-400">
-                  <Target size={12} className="inline mr-1" />
-                  {prospectsCount} prospects in this project
-                </p>
-              )}
-            </div>
-
-            {/* Start Date */}
-            <div className="space-y-2">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                Intro Email Date
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start bg-zinc-950 border-zinc-800 text-zinc-300 h-12"
-                  >
-                    <CalendarIcon size={16} className="mr-2" />
-                    {startDate ? format(startDate, 'PPP') : 'Pick start date'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-800" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={setStartDate}
-                    initialFocus
-                    className="bg-zinc-900"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Start Time */}
-            <div className="space-y-2">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                Send Time
-              </Label>
-              <div className="flex items-center gap-2">
-                <Clock size={16} className="text-zinc-500" />
-                <Input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800 rounded-sm h-12 font-mono"
-                />
-              </div>
-            </div>
-
-            {/* Gap Days */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                  Gap Between Steps
-                </Label>
-                <span className="font-chivo font-bold text-2xl text-blue-400">
-                  {gapDays} days
-                </span>
-              </div>
-              <Slider
-                value={[gapDays]}
-                onValueChange={(val) => setGapDays(val[0])}
-                min={1}
-                max={14}
-                step={1}
-                className="w-full"
-              />
-              <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
-                <span>1 day</span>
-                <span>14 days</span>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Advanced Scheduling Controls */}
-        <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6 mb-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-sm bg-violet-600/10 border border-violet-600/20 flex items-center justify-center">
-              <Settings size={24} className="text-violet-500" />
-            </div>
-            <div>
-              <h3 className="font-chivo font-bold text-lg text-white">Advanced Scheduling</h3>
-              <p className="font-mono text-xs text-zinc-500">
-                Smart constraints for natural email delivery
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Mails per Domain per Day */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                  Mails per Domain/Day
-                </Label>
-                <span className="font-chivo font-bold text-2xl text-violet-400">
-                  {mailsPerDomainPerDay}
-                </span>
-              </div>
-              <Slider
-                value={[mailsPerDomainPerDay]}
-                onValueChange={(val) => setMailsPerDomainPerDay(val[0])}
-                min={1}
-                max={50}
-                step={1}
-                className="w-full"
-              />
-              <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
-                <span>1 mail</span>
-                <span>50 mails</span>
-              </div>
-              <p className="font-mono text-[10px] text-zinc-600">
-                Limit emails to same domain per day to avoid spam filters
-              </p>
-            </div>
-
-            {/* Jitter */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                  Time Jitter
-                </Label>
-                <span className="font-chivo font-bold text-2xl text-violet-400">
-                  ±{jitterMinutes} min
-                </span>
-              </div>
-              <Slider
-                value={[jitterMinutes]}
-                onValueChange={(val) => setJitterMinutes(val[0])}
-                min={0}
-                max={60}
-                step={5}
-                className="w-full"
-              />
-              <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
-                <span>No jitter</span>
-                <span>±60 min</span>
-              </div>
-              <p className="font-mono text-[10px] text-zinc-600">
-                Randomize send times for more natural delivery
-              </p>
-            </div>
-          </div>
-
-          {selectedProject && (
-            <div className="mt-4 pt-4 border-t border-zinc-800">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={updateProjectSettings}
-                className="text-zinc-400 text-xs"
+          <div className="space-y-2">
+            <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+              Select Project
+            </Label>
+            <Select 
+              value={selectedProjectId || "select"} 
+              onValueChange={(val) => setSelectedProjectId(val === "select" ? null : val)}
+            >
+              <SelectTrigger 
+                className="bg-zinc-950 border-zinc-800 rounded-sm h-12"
+                data-testid="project-select"
               >
-                <Settings size={12} className="mr-1" />
-                Save all settings as project default
-              </Button>
-            </div>
-          )}
+                <SelectValue placeholder="Choose a project..." />
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-900 border-zinc-800">
+                <SelectItem value="select" disabled>Choose a project...</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </Card>
 
-        {/* Preview */}
-        {startDate && (
-          <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6 mb-6">
-            <h3 className="font-chivo font-bold text-lg text-white mb-4">
-              Schedule Preview
-            </h3>
-            <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2">
-              {previewDates.map((date, i) => (
-                <div key={i} className="flex items-center">
-                  <div className={`flex-shrink-0 p-4 rounded-sm border ${
-                    i === 0 
-                      ? "bg-blue-600/10 border-blue-600/30" 
-                      : "bg-violet-600/10 border-violet-600/30"
-                  }`}>
-                    <p className={`font-chivo font-bold text-lg ${
-                      i === 0 ? "text-blue-400" : "text-violet-400"
-                    }`}>
-                      Step {i + 1}
-                    </p>
-                    <p className="font-mono text-xs text-zinc-400">
-                      {format(date, 'MMM d')}
-                    </p>
-                    <p className="font-mono text-[10px] text-zinc-500">
-                      {startTime}
-                    </p>
-                  </div>
-                  {i < 4 && (
-                    <div className="px-2 text-zinc-600">
-                      <ArrowRight size={16} />
-                    </div>
-                  )}
+        {selectedProjectId && (
+          <>
+            {/* Email Limits */}
+            <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-sm bg-emerald-600/10 border border-emerald-600/20 flex items-center justify-center">
+                  <Mail size={24} className="text-emerald-500" />
                 </div>
-              ))}
-            </div>
-            <p className="font-mono text-xs text-zinc-500 mt-4">
-              × {prospectsCount} prospects = <span className="text-white font-bold">{prospectsCount * 5} total tasks</span>
-            </p>
-          </Card>
-        )}
+                <div>
+                  <h3 className="font-chivo font-bold text-lg text-white">Email Limits</h3>
+                  <p className="font-mono text-xs text-zinc-500">
+                    Control email volume per mail ID
+                  </p>
+                </div>
+              </div>
 
-        {/* Apply Button */}
-        <Button
-          onClick={handleApplyLever}
-          disabled={applying || !selectedProject || !startDate || prospectsCount === 0}
-          data-testid="apply-lever-btn"
-          className="w-full h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-sm font-bold text-lg btn-glow"
-        >
-          {applying ? (
-            <span>Generating Tasks...</span>
-          ) : (
-            <>
-              <Zap size={20} className="mr-2" />
-              Apply Schedule Lever
-            </>
-          )}
-        </Button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Max mails per day */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                      Max Mails per Day per Mail-ID
+                    </Label>
+                    <span className="font-chivo font-bold text-2xl text-emerald-400">
+                      {config.max_mails_per_day_per_mail_id}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[config.max_mails_per_day_per_mail_id]}
+                    onValueChange={(val) => setConfig({ ...config, max_mails_per_day_per_mail_id: val[0] })}
+                    min={1}
+                    max={50}
+                    step={1}
+                    className="w-full"
+                    data-testid="max-mails-slider"
+                  />
+                  <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
+                    <span>1</span>
+                    <span>50</span>
+                  </div>
+                </div>
 
-        {/* Result */}
-        {result && (
-          <Card className="bg-emerald-600/10 border border-emerald-600/30 rounded-sm p-6 mt-6">
-            <div className="flex items-center gap-3">
-              <CheckCircle size={24} className="text-emerald-500" />
-              <div>
-                <p className="font-chivo font-bold text-lg text-emerald-400">
-                  Schedule Applied Successfully!
-                </p>
-                <p className="font-mono text-sm text-zinc-400">
-                  Generated {result.tasks_count} tasks for {result.prospects_count} prospects
+                {/* Min time gap */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                      Min Gap Between Mails
+                    </Label>
+                    <span className="font-chivo font-bold text-2xl text-emerald-400">
+                      {config.min_time_gap_minutes} min
+                    </span>
+                  </div>
+                  <Slider
+                    value={[config.min_time_gap_minutes]}
+                    onValueChange={(val) => setConfig({ ...config, min_time_gap_minutes: val[0] })}
+                    min={1}
+                    max={60}
+                    step={1}
+                    className="w-full"
+                    data-testid="min-gap-slider"
+                  />
+                  <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
+                    <span>1 min</span>
+                    <span>60 min</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Time Jitter */}
+              <div className="mt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                    Random Time Jitter
+                  </Label>
+                  <span className="font-chivo font-bold text-2xl text-emerald-400">
+                    ±{config.time_jitter_minutes} min
+                  </span>
+                </div>
+                <Slider
+                  value={[config.time_jitter_minutes]}
+                  onValueChange={(val) => setConfig({ ...config, time_jitter_minutes: val[0] })}
+                  min={0}
+                  max={30}
+                  step={1}
+                  className="w-full"
+                  data-testid="jitter-slider"
+                />
+                <p className="font-mono text-[10px] text-zinc-600">
+                  Adds randomness to send times for more natural delivery
                 </p>
               </div>
-            </div>
-          </Card>
+            </Card>
+
+            {/* Touchpoints Configuration */}
+            <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-sm bg-violet-600/10 border border-violet-600/20 flex items-center justify-center">
+                  <CalendarDays size={24} className="text-violet-500" />
+                </div>
+                <div>
+                  <h3 className="font-chivo font-bold text-lg text-white">Touchpoints Sequence</h3>
+                  <p className="font-mono text-xs text-zinc-500">
+                    Configure the number and timing of follow-ups
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* Number of touchpoints */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                      Number of Touchpoints
+                    </Label>
+                    <span className="font-chivo font-bold text-2xl text-violet-400">
+                      {config.touchpoints_count}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[config.touchpoints_count]}
+                    onValueChange={(val) => handleTouchpointsCountChange(val[0])}
+                    min={1}
+                    max={10}
+                    step={1}
+                    className="w-full"
+                    data-testid="touchpoints-slider"
+                  />
+                  <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
+                    <span>1</span>
+                    <span>10</span>
+                  </div>
+                </div>
+
+                {/* Gap configuration for each touchpoint */}
+                <div className="space-y-3">
+                  <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                    Days Gap from Previous Touchpoint
+                  </Label>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {Array.from({ length: config.touchpoints_count }).map((_, i) => (
+                      <div key={i} className="space-y-1">
+                        <Label className="font-mono text-xs text-zinc-400">
+                          {i === 0 ? "Intro" : `F/U ${i}`}
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={30}
+                          value={config.touchpoint_gaps[i] ?? 0}
+                          onChange={(e) => handleTouchpointGapChange(i, e.target.value)}
+                          disabled={i === 0}
+                          className="bg-zinc-950 border-zinc-800 h-10 font-mono text-center"
+                          data-testid={`gap-input-${i}`}
+                        />
+                        <p className="font-mono text-[10px] text-zinc-600 text-center">
+                          {i === 0 ? "Day 0" : "days"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Work Hours & Days */}
+            <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-sm bg-amber-600/10 border border-amber-600/20 flex items-center justify-center">
+                  <Timer size={24} className="text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="font-chivo font-bold text-lg text-white">Work Schedule</h3>
+                  <p className="font-mono text-xs text-zinc-500">
+                    Define when emails can be scheduled
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Work hours */}
+                <div className="space-y-4">
+                  <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                    Work Hours
+                  </Label>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <Label className="font-mono text-xs text-zinc-400 mb-1 block">Start</Label>
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-zinc-500" />
+                        <Input
+                          type="time"
+                          value={config.work_start_time}
+                          onChange={(e) => setConfig({ ...config, work_start_time: e.target.value })}
+                          className="bg-zinc-950 border-zinc-800 h-10 font-mono"
+                          data-testid="work-start-time"
+                        />
+                      </div>
+                    </div>
+                    <span className="text-zinc-500 pt-6">to</span>
+                    <div className="flex-1">
+                      <Label className="font-mono text-xs text-zinc-400 mb-1 block">End</Label>
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-zinc-500" />
+                        <Input
+                          type="time"
+                          value={config.work_end_time}
+                          onChange={(e) => setConfig({ ...config, work_end_time: e.target.value })}
+                          className="bg-zinc-950 border-zinc-800 h-10 font-mono"
+                          data-testid="work-end-time"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Working days */}
+                <div className="space-y-4">
+                  <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                    Working Days
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {weekDays.map((day) => (
+                      <Button
+                        key={day.value}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleWorkingDay(day.value)}
+                        data-testid={`day-${day.value}`}
+                        className={`h-10 w-12 font-mono text-sm ${
+                          config.working_days.includes(day.value)
+                            ? "bg-amber-600/20 border-amber-600/50 text-amber-400"
+                            : "border-zinc-700 text-zinc-500"
+                        }`}
+                      >
+                        {day.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Save Button */}
+            <Button
+              onClick={handleSaveConfig}
+              disabled={saving}
+              data-testid="save-config-btn"
+              className="w-full h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-sm font-bold text-lg"
+            >
+              {saving ? (
+                <span>Saving...</span>
+              ) : (
+                <>
+                  <Save size={20} className="mr-2" />
+                  Save Configuration
+                </>
+              )}
+            </Button>
+          </>
         )}
       </div>
     </MainLayout>
