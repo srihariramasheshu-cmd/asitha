@@ -519,13 +519,21 @@ async def create_project(req: ProjectCreate, admin: dict = Depends(require_admin
 
 @api_router.get("/projects", response_model=List[ProjectResponse])
 async def list_projects(user: dict = Depends(get_current_user)):
+    # Check if simulation is active and filter accordingly
+    simulation = await db.simulations.find_one({"status": "active"})
+    sim_filter = {}
+    if simulation:
+        sim_filter["simulation_id"] = simulation["id"]
+    else:
+        sim_filter["simulation_id"] = {"$exists": False}
+    
     if user["role"] in ["admin", "super_admin"]:
-        projects = await db.projects.find({}, {"_id": 0}).to_list(1000)
+        projects = await db.projects.find(sim_filter, {"_id": 0}).to_list(1000)
     else:
         # Seat can only see assigned projects
-        assignments = await db.project_assignments.find({"seat_id": user["id"]}, {"_id": 0}).to_list(1000)
+        assignments = await db.project_assignments.find({"seat_id": user["id"], **sim_filter}, {"_id": 0}).to_list(1000)
         project_ids = [a["project_id"] for a in assignments]
-        projects = await db.projects.find({"id": {"$in": project_ids}}, {"_id": 0}).to_list(1000)
+        projects = await db.projects.find({"id": {"$in": project_ids}, **sim_filter}, {"_id": 0}).to_list(1000)
     
     # Add defaults for existing projects (migration support)
     for p in projects:
