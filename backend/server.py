@@ -882,8 +882,16 @@ async def create_prospect(req: ProspectCreate, user: dict = Depends(get_current_
 
 @api_router.get("/prospects", response_model=List[ProspectResponse])
 async def list_prospects(project_id: Optional[str] = None, user: dict = Depends(get_current_user)):
-    query = {}
-    if user["role"] == "admin":
+    # Check if simulation is active
+    simulation = await db.simulations.find_one({"status": "active"})
+    sim_filter = {}
+    if simulation:
+        sim_filter["simulation_id"] = simulation["id"]
+    else:
+        sim_filter["simulation_id"] = {"$exists": False}
+    
+    query = {**sim_filter}
+    if user["role"] in ["admin", "super_admin"]:
         if project_id:
             query["project_id"] = project_id
     else:
