@@ -14,8 +14,9 @@ import {
   Activity,
   Crown,
   ListTodo,
-  Zap,
-  Calendar
+  Settings,
+  Calendar,
+  Mail
 } from "lucide-react";
 
 export const Sidebar = () => {
@@ -30,8 +31,9 @@ export const Sidebar = () => {
     { path: "/admin/users", icon: UserCog, label: "Users & Approvals" },
     { path: "/projects", icon: FolderKanban, label: "Projects" },
     { path: "/admin/seats", icon: Users, label: "Seats" },
+    { path: "/admin/mail-management", icon: Mail, label: "Mail Management" },
     { path: "/prospects", icon: Target, label: "Prospects" },
-    { path: "/admin/schedule-lever", icon: Zap, label: "Schedule Lever" },
+    { path: "/admin/schedule-lever", icon: Settings, label: "Scheduler Config" },
     { path: "/admin/task-management", icon: ListTodo, label: "Task Management" },
     { path: "/calendar", icon: Calendar, label: "Calendar View" },
     { path: "/admin/activity-logs", icon: Activity, label: "Activity Logs" },
