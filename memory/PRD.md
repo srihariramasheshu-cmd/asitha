@@ -224,6 +224,7 @@ Develop "ABM Blinder," an internal application for managed outbound campaigns wi
 - Super Admin: srihariramasheshu@gmail.com / superadmin123
 
 ## Test Reports
+- /app/test_reports/iteration_6.json (Bug fixes - Projects crash, Login errors - 100% passed)
 - /app/test_reports/iteration_5.json (Phase 2 - Simulation - 14 tests passed)
 - /app/test_reports/iteration_4.json (Phase 1 - Mail Management - 28 tests passed)
 - /app/test_reports/iteration_3.json (Previous session)
