@@ -597,6 +597,160 @@ export default function TaskManagementPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Task Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="bg-zinc-900 border border-zinc-800 rounded-sm max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-chivo font-bold text-xl text-white flex items-center gap-2">
+              <Edit size={20} className="text-blue-400" />
+              Edit Task
+            </DialogTitle>
+          </DialogHeader>
+          
+          {editingTask && (
+            <div className="space-y-6 mt-4">
+              {/* Task Info */}
+              <div className="bg-zinc-800/50 rounded-sm p-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="font-mono text-[10px] text-zinc-500 uppercase">Prospect</p>
+                    <p className="text-white mt-1">
+                      {editingTask.prospect_name || "N/A"} 
+                      {editingTask.prospect_company && <span className="text-zinc-400"> @ {editingTask.prospect_company}</span>}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-[10px] text-zinc-500 uppercase">Scheduled</p>
+                    <p className="text-white mt-1">{editingTask.send_date} at {editingTask.send_time}</p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-[10px] text-zinc-500 uppercase">Step</p>
+                    <p className="text-white mt-1">{editingTask.description || `Step ${editingTask.step_number}`}</p>
+                  </div>
+                  {editingTask.assigned_mail_email && (
+                    <div>
+                      <p className="font-mono text-[10px] text-zinc-500 uppercase">Sending From</p>
+                      <p className="text-white mt-1 flex items-center gap-1">
+                        <Mail size={12} className="text-emerald-400" />
+                        {editingTask.assigned_mail_email}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Change */}
+              <div className="space-y-2">
+                <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                  Status
+                </Label>
+                <Select value={editStatus} onValueChange={setEditStatus}>
+                  <SelectTrigger className="bg-zinc-950 border-zinc-800 rounded-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800">
+                    <SelectItem value="pending">
+                      <span className="flex items-center gap-2">
+                        <Clock size={14} className="text-amber-400" />
+                        Pending
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="sent">
+                      <span className="flex items-center gap-2">
+                        <CheckCircle size={14} className="text-emerald-400" />
+                        Sent
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="replied">
+                      <span className="flex items-center gap-2">
+                        <MessageSquare size={14} className="text-blue-400" />
+                        Replied
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={handleSaveTaskStatus}
+                  disabled={saving || editStatus === editingTask?.status}
+                  size="sm"
+                  className="w-full bg-blue-600 hover:bg-blue-500 mt-2"
+                >
+                  {saving ? "Saving..." : "Update Status"}
+                </Button>
+              </div>
+
+              {/* Notes Section */}
+              {editingTask.prospect_id && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                      Prospect Notes
+                    </Label>
+                    <Badge variant="outline" className="text-[10px] border-zinc-600 text-zinc-400">
+                      {taskNotes.length} notes
+                    </Badge>
+                  </div>
+                  
+                  {/* Existing Notes */}
+                  {taskNotes.length > 0 && (
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {taskNotes.map((note) => (
+                        <div key={note.id} className="p-3 bg-zinc-800/50 rounded-sm border border-zinc-700/50">
+                          <div className="flex items-start justify-between">
+                            <p className="text-sm text-zinc-300">{note.content}</p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteNote(note.id)}
+                              className="text-zinc-500 hover:text-red-400 h-6 w-6 p-0"
+                            >
+                              <Trash2 size={12} />
+                            </Button>
+                          </div>
+                          <p className="font-mono text-[10px] text-zinc-500 mt-1">
+                            {new Date(note.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Add New Note */}
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder="Add a note about this prospect..."
+                      className="bg-zinc-950 border-zinc-800 rounded-sm font-manrope resize-none flex-1"
+                      rows={2}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleAddNote}
+                    disabled={saving || !newNote.trim()}
+                    size="sm"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500"
+                  >
+                    <Plus size={14} className="mr-1" />
+                    Add Note
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditModal(false)}
+              className="border-zinc-700 text-zinc-300"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
