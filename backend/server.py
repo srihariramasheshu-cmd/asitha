@@ -192,6 +192,7 @@ class ProspectResponse(BaseModel):
     domain: str
     custom_fields: Dict[str, Any]
     status: str
+    assigned_mail_id: Optional[str] = None
     created_at: str
 
 class OutreachStepBase(BaseModel):
