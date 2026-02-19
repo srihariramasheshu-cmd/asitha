@@ -167,6 +167,11 @@ function AppRoutes() {
           <ScheduleLever />
         </ProtectedRoute>
       } />
+      <Route path="/admin/mail-management" element={
+        <ProtectedRoute adminOnly>
+          <MailManagementPage />
+        </ProtectedRoute>
+      } />
       <Route path="/admin/schedule" element={
         <ProtectedRoute adminOnly>
           <ScheduleUploadPage />
