@@ -46,7 +46,8 @@ export const Sidebar = () => {
     { path: "/calendar", icon: Calendar, label: "My Calendar" },
     { path: "/projects", icon: FolderKanban, label: "My Projects" },
     { path: "/prospects", icon: Target, label: "My Prospects" },
-    { path: "/tasks", icon: CalendarClock, label: "My Tasks" },
+    { path: "/scheduling", icon: CalendarClock, label: "Schedule" },
+    { path: "/tasks", icon: ListTodo, label: "My Tasks" },
   ];
 
   const navItems = ["admin", "super_admin"].includes(user?.role) ? adminNavItems : seatNavItems;
