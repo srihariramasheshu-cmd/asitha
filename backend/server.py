@@ -1885,9 +1885,17 @@ class SimulationResponse(BaseModel):
     message: str
     data: Dict[str, Any]
 
+# Helper function to check simulation and get filter
+async def get_simulation_filter(user: dict) -> Dict[str, Any]:
+    """Returns simulation_id filter if simulation is active, empty dict otherwise"""
+    simulation = await db.simulations.find_one({"status": "active"})
+    if simulation:
+        return {"simulation_id": simulation["id"]}
+    return {"simulation_id": {"$exists": False}}  # Real data has no simulation_id
+
 @api_router.get("/simulation/status")
-async def get_simulation_status(admin: dict = Depends(require_admin)):
-    """Check if a simulation is currently active"""
+async def get_simulation_status(user: dict = Depends(get_current_user)):
+    """Check if a simulation is currently active - accessible by all authenticated users"""
     simulation = await db.simulations.find_one({"status": "active"}, {"_id": 0})
     if simulation:
         return {
@@ -1898,6 +1906,34 @@ async def get_simulation_status(admin: dict = Depends(require_admin)):
         }
     return {"active": False}
 
+@api_router.get("/simulation/sample-csv")
+async def get_sample_prospect_csv(user: dict = Depends(get_current_user)):
+    """Download a sample CSV file for prospect upload during simulation"""
+    import io
+    
+    # Sample prospects data
+    sample_data = [
+        ["company_name", "contact_name", "email", "phone", "linkedin", "title", "domain"],
+        ["Acme Corp", "John Smith", "john.smith@acmecorp.com", "+1-555-100-1001", "linkedin.com/in/johnsmith", "CEO", "acmecorp.com"],
+        ["TechVentures", "Sarah Johnson", "sarah.j@techventures.io", "+1-555-100-1002", "linkedin.com/in/sarahj", "CTO", "techventures.io"],
+        ["GlobalSoft", "Mike Williams", "mike.w@globalsoft.com", "+1-555-100-1003", "linkedin.com/in/mikew", "VP Sales", "globalsoft.com"],
+        ["DataDriven Inc", "Emma Brown", "emma.b@datadriven.co", "+1-555-100-1004", "linkedin.com/in/emmab", "Director", "datadriven.co"],
+        ["CloudFirst", "David Jones", "david.j@cloudfirst.net", "+1-555-100-1005", "linkedin.com/in/davidj", "Manager", "cloudfirst.net"],
+        ["InnovateTech", "Lisa Garcia", "lisa.g@innovatetech.com", "+1-555-100-1006", "linkedin.com/in/lisag", "VP Marketing", "innovatetech.com"],
+        ["DigitalEdge", "James Miller", "james.m@digitaledge.io", "+1-555-100-1007", "linkedin.com/in/jamesm", "Founder", "digitaledge.io"],
+        ["SmartSolutions", "Anna Davis", "anna.d@smartsolutions.com", "+1-555-100-1008", "linkedin.com/in/annad", "CEO", "smartsolutions.com"],
+    ]
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerows(sample_data)
+    
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sample_prospects.csv"}
+    )
+
 @api_router.post("/simulation/start", response_model=SimulationResponse)
 async def start_simulation(admin: dict = Depends(require_admin)):
     """
@@ -1905,9 +1941,7 @@ async def start_simulation(admin: dict = Depends(require_admin)):
     - 1 dummy project with full scheduler config
     - 1 mail domain with 3 mail IDs
     - 3 dummy seats (assigned to project)
-    - 5 prospects per seat (15 total)
-    - Auto-schedules all prospects
-    - Marks some tasks as sent
+    - NO prospects - users will upload them using sample CSV
     """
     from datetime import timedelta
     import random
