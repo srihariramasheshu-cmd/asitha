@@ -79,6 +79,29 @@ Develop "ABM Blinder," an internal application for managed outbound campaigns wi
 - Round-robin mail assignment verified
 - Time constraints verified (gaps, jitter, work hours)
 
+### Phase 2: Test Simulation Mode (Feb 19, 2026)
+
+**Backend:**
+- [x] GET /api/simulation/status - Check if simulation is active
+- [x] POST /api/simulation/start - Creates complete test data:
+  - 1 project with scheduler config
+  - 1 mail domain (simcompany.test)
+  - 3 mail IDs assigned to 3 seats
+  - 15 prospects (5 per seat)
+  - 60 tasks (4 touchpoints per prospect)
+  - 5 intro emails pre-marked as sent
+- [x] POST /api/simulation/end - Cleans up all simulation data
+
+**Frontend:**
+- [x] "Run Test Simulation" button in Admin Dashboard
+- [x] "Simulation Mode Active" banner when active
+- [x] "View Details" modal with simulation summary
+- [x] "End Simulation" button to cleanup
+
+**Testing:**
+- All 14 simulation tests passed (100%)
+- Full lifecycle verified: start → verify → end → cleanup
+
 ### Previous Work (Prior Sessions)
 - User authentication with approval workflow
 - Project CRUD with seat assignments
