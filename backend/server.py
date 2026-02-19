@@ -1439,9 +1439,6 @@ async def schedule_prospects(project_id: str, user: dict = Depends(get_current_u
         if len(existing_times) >= max_mails_per_day:
             return None
         
-        # Calculate available time slots
-        work_minutes = (work_end_h * 60 + work_end_m) - (work_start_h * 60 + work_start_m)
-        
         if not existing_times:
             # First email of the day - start at work_start with optional jitter
             base_minutes = work_start_h * 60 + work_start_m
