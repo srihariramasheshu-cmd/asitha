@@ -174,6 +174,43 @@ export default function AdminDashboard() {
       title="Control Tower" 
       subtitle="Global campaign overview and management"
     >
+      {/* Simulation Banner */}
+      {simulation?.active && (
+        <div className="mb-6 p-4 bg-amber-600/10 border border-amber-600/30 rounded-sm flex items-center justify-between animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-sm bg-amber-600/20 border border-amber-600/30 flex items-center justify-center animate-pulse">
+              <FlaskConical size={20} className="text-amber-400" />
+            </div>
+            <div>
+              <p className="font-chivo font-bold text-amber-400">Simulation Mode Active</p>
+              <p className="font-mono text-xs text-amber-400/70">
+                {simulation.data?.seats_count || 3} seats • {simulation.data?.prospects_count || 15} prospects • {simulation.data?.tasks_created || 60} tasks
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => setShowSimReport(true)}
+              variant="outline"
+              size="sm"
+              className="border-amber-600/50 text-amber-400 hover:bg-amber-600/20"
+            >
+              View Details
+            </Button>
+            <Button
+              onClick={endSimulation}
+              disabled={simLoading}
+              size="sm"
+              className="bg-red-600 hover:bg-red-500 text-white"
+              data-testid="end-simulation-btn"
+            >
+              <Square size={14} className="mr-2" />
+              End Simulation
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {statCards.map((stat, index) => (
@@ -234,6 +271,18 @@ export default function AdminDashboard() {
         <Card className="bg-zinc-900/50 border border-white/5 rounded-sm p-6">
           <h3 className="font-chivo font-bold text-lg text-white mb-4">Quick Actions</h3>
           <div className="space-y-3">
+            {/* Simulation Button */}
+            {!simulation?.active && (
+              <Button
+                onClick={startSimulation}
+                disabled={simLoading}
+                data-testid="start-simulation-btn"
+                className="w-full justify-start bg-amber-600 hover:bg-amber-500 text-white rounded-sm h-12 font-manrope btn-glow"
+              >
+                <FlaskConical size={18} className="mr-3" />
+                {simLoading ? "Starting Simulation..." : "Run Test Simulation"}
+              </Button>
+            )}
             <Button
               onClick={() => navigate("/admin/users")}
               data-testid="quick-manage-users"
@@ -321,6 +370,92 @@ export default function AdminDashboard() {
           )}
         </Card>
       </div>
+
+      {/* Simulation Report Modal */}
+      <Dialog open={showSimReport} onOpenChange={setShowSimReport}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="font-chivo text-white flex items-center gap-2">
+              <FlaskConical size={20} className="text-amber-400" />
+              Simulation Details
+            </DialogTitle>
+          </DialogHeader>
+          
+          {simulation?.data && (
+            <div className="space-y-6 mt-4">
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-zinc-800/50 rounded-sm p-4 text-center">
+                  <p className="font-chivo font-bold text-2xl text-emerald-400">{simulation.data.seats_count}</p>
+                  <p className="font-mono text-xs text-zinc-500">Seats</p>
+                </div>
+                <div className="bg-zinc-800/50 rounded-sm p-4 text-center">
+                  <p className="font-chivo font-bold text-2xl text-blue-400">{simulation.data.prospects_count}</p>
+                  <p className="font-mono text-xs text-zinc-500">Prospects</p>
+                </div>
+                <div className="bg-zinc-800/50 rounded-sm p-4 text-center">
+                  <p className="font-chivo font-bold text-2xl text-violet-400">{simulation.data.tasks_created}</p>
+                  <p className="font-mono text-xs text-zinc-500">Tasks</p>
+                </div>
+              </div>
+
+              {/* Project Info */}
+              <div className="bg-zinc-800/30 rounded-sm p-4">
+                <p className="font-mono text-xs text-zinc-500 mb-2 uppercase">Project</p>
+                <p className="text-white font-chivo">{simulation.data.project_name}</p>
+                <p className="font-mono text-xs text-zinc-400 mt-1">Domain: {simulation.data.domain}</p>
+              </div>
+
+              {/* Seats */}
+              <div>
+                <p className="font-mono text-xs text-zinc-500 mb-3 uppercase">Simulated Seats</p>
+                <div className="space-y-2">
+                  {simulation.data.seats?.map((seat, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-sm">
+                      <div>
+                        <p className="text-white text-sm">{seat.name}</p>
+                        <p className="font-mono text-xs text-zinc-500">{seat.email}</p>
+                      </div>
+                      <Badge className="bg-emerald-600/20 text-emerald-400 border-emerald-600/30 text-xs">
+                        {seat.mail_id}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Login Info */}
+              <div className="bg-amber-600/10 border border-amber-600/30 rounded-sm p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle size={16} className="text-amber-400 mt-0.5" />
+                  <div>
+                    <p className="font-mono text-xs text-amber-400 font-bold">Test Credentials</p>
+                    <p className="font-mono text-xs text-amber-400/70 mt-1">
+                      All simulation seats use password: <code className="bg-zinc-800 px-1">simpass123</code>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowSimReport(false)} 
+              className="border-zinc-700"
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => { navigate("/calendar"); setShowSimReport(false); }}
+              className="bg-blue-600 hover:bg-blue-500"
+            >
+              View Calendar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
