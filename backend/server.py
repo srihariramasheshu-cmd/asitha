@@ -83,16 +83,50 @@ class LoginResponse(BaseModel):
     token: str
     user: UserResponse
 
+# ============== MAIL DOMAIN & MAIL ID MODELS ==============
+
+class MailDomainCreate(BaseModel):
+    domain: str
+    project_id: str
+
+class MailDomainResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    domain: str
+    project_id: str
+    created_by: str
+    created_at: str
+
+class MailIdCreate(BaseModel):
+    email: str
+    domain_id: str
+
+class MailIdUpdate(BaseModel):
+    seat_id: Optional[str] = None  # Assign/unassign seat
+
+class MailIdResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    email: str
+    domain_id: str
+    project_id: str
+    seat_id: Optional[str] = None
+    created_at: str
+
+# ============== PROJECT MODELS ==============
+
 class ProjectBase(BaseModel):
     name: str
     description: Optional[str] = ""
-    domains: List[str] = []
-    # Lever settings
-    gap_days: int = Field(default=3, ge=1, le=30)  # Days between follow-ups
-    step_labels: List[str] = ["Intro Email", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"]
-    # Advanced scheduling constraints
-    mails_per_domain_per_day: int = Field(default=10, ge=1, le=100)  # Limit mails per domain per day
-    jitter_minutes: int = Field(default=0, ge=0, le=120)  # Random jitter in minutes for natural scheduling
+    # Scheduler configuration
+    max_mails_per_day_per_mail_id: int = Field(default=10, ge=1, le=100)
+    min_time_gap_minutes: int = Field(default=5, ge=1, le=120)  # Min gap between mails from same mail-id
+    time_jitter_minutes: int = Field(default=0, ge=0, le=60)  # Random jitter
+    touchpoints_count: int = Field(default=5, ge=1, le=10)  # Number of touchpoints per sequence
+    touchpoint_gaps: List[int] = [0, 3, 5, 7, 10]  # Gap in days for each touchpoint (first is always 0)
+    work_start_time: str = "09:00"  # HH:MM
+    work_end_time: str = "18:00"  # HH:MM
+    working_days: List[int] = [1, 2, 3, 4, 5]  # 1=Monday, 7=Sunday
 
 class ProjectCreate(ProjectBase):
     pass
@@ -102,11 +136,14 @@ class ProjectResponse(BaseModel):
     id: str
     name: str
     description: str
-    domains: List[str]
-    gap_days: int
-    step_labels: List[str]
-    mails_per_domain_per_day: int = 10
-    jitter_minutes: int = 0
+    max_mails_per_day_per_mail_id: int = 10
+    min_time_gap_minutes: int = 5
+    time_jitter_minutes: int = 0
+    touchpoints_count: int = 5
+    touchpoint_gaps: List[int] = [0, 3, 5, 7, 10]
+    work_start_time: str = "09:00"
+    work_end_time: str = "18:00"
+    working_days: List[int] = [1, 2, 3, 4, 5]
     created_by: str
     created_at: str
 
