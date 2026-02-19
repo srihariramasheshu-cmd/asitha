@@ -167,6 +167,76 @@ export default function TaskManagementPage() {
     }
   };
 
+  const handleEditTask = async (task) => {
+    setEditingTask(task);
+    setEditStatus(task.status);
+    setEditNote("");
+    
+    // Fetch notes for the prospect
+    if (task.prospect_id) {
+      try {
+        const res = await axios.get(`${API}/prospects/${task.prospect_id}/notes`);
+        setTaskNotes(res.data);
+      } catch {
+        setTaskNotes([]);
+      }
+    } else {
+      setTaskNotes([]);
+    }
+    
+    setShowEditModal(true);
+  };
+
+  const handleSaveTaskStatus = async () => {
+    setSaving(true);
+    try {
+      await axios.put(`${API}/tasks/${editingTask.id}/status`, {
+        status: editStatus
+      });
+      toast.success("Task status updated");
+      setShowEditModal(false);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to update task");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !editingTask?.prospect_id) {
+      toast.error("Please enter a note");
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      await axios.post(`${API}/prospects/${editingTask.prospect_id}/notes`, {
+        content: newNote
+      });
+      toast.success("Note added");
+      setNewNote("");
+      // Refresh notes
+      const res = await axios.get(`${API}/prospects/${editingTask.prospect_id}/notes`);
+      setTaskNotes(res.data);
+    } catch (error) {
+      toast.error("Failed to add note");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    try {
+      await axios.delete(`${API}/notes/${noteId}`);
+      toast.success("Note deleted");
+      const res = await axios.get(`${API}/prospects/${editingTask.prospect_id}/notes`);
+      setTaskNotes(res.data);
+    } catch (error) {
+      toast.error("Failed to delete note");
+    }
+  };
+
   const resetForm = () => {
     setNewTask({
       seat_id: "",
