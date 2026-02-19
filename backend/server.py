@@ -2080,12 +2080,13 @@ async def start_simulation(admin: dict = Depends(require_admin)):
         
         for prospect in seat_prospects:
             touchpoint_gaps = [0, 3, 7, 14]
+            prev_task_date_str = None
             
             for tp_index in range(4):  # 4 touchpoints
                 if tp_index == 0:
                     base_date = start_date
                 else:
-                    prev_task_date = datetime.strptime(prev_date, "%Y-%m-%d")
+                    prev_task_date = datetime.strptime(prev_task_date_str, "%Y-%m-%d")
                     base_date = prev_task_date + timedelta(days=touchpoint_gaps[tp_index])
                 
                 # Find working day
@@ -2130,7 +2131,7 @@ async def start_simulation(admin: dict = Depends(require_admin)):
                 }
                 await db.tasks.insert_one(task_doc)
                 tasks_created += 1
-                prev_date = date_str
+                prev_task_date_str = date_str
             
             # Update prospect with assigned mail ID
             await db.prospects.update_one(
