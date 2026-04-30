@@ -225,6 +225,122 @@ class ColumnMapping(BaseModel):
 class ScheduleUpload(BaseModel):
     tasks: List[TaskBase]
 
+# ============== LIBERTY CAD CRM MODELS ==============
+
+CRM_SOURCES = {"smartlead", "heyreach", "linkedin", "referral", "other"}
+CRM_STATUSES = {"new", "contacted", "nurturing", "qualified", "meeting_booked", "won", "lost", "unresponsive"}
+FOLLOWUP_TYPES = {"email", "call", "linkedin", "meeting", "other"}
+FOLLOWUP_STATUSES = {"pending", "done", "skipped"}
+
+class ResponderBase(BaseModel):
+    full_name: str
+    email: Optional[str] = ""
+    company: Optional[str] = ""
+    title: Optional[str] = ""
+    phone: Optional[str] = ""
+    linkedin: Optional[str] = ""
+    source: str = Field(default="smartlead")
+    campaign_name: Optional[str] = ""
+    response_date: Optional[str] = ""
+    response_summary: Optional[str] = ""
+    status: str = Field(default="new")
+    owner_id: Optional[str] = None
+    tags: List[str] = []
+
+class ResponderCreate(ResponderBase):
+    pass
+
+class ResponderUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    company: Optional[str] = None
+    title: Optional[str] = None
+    phone: Optional[str] = None
+    linkedin: Optional[str] = None
+    source: Optional[str] = None
+    campaign_name: Optional[str] = None
+    response_date: Optional[str] = None
+    response_summary: Optional[str] = None
+    status: Optional[str] = None
+    owner_id: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+class ResponderResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    full_name: str
+    email: str
+    company: str
+    title: str
+    phone: str
+    linkedin: str
+    source: str
+    campaign_name: str
+    response_date: str
+    response_summary: str
+    status: str
+    owner_id: Optional[str] = None
+    owner_name: Optional[str] = None
+    tags: List[str]
+    created_by: str
+    created_by_name: Optional[str] = None
+    created_at: str
+    updated_at: str
+    last_followup_at: Optional[str] = None
+    next_followup_at: Optional[str] = None
+    followups_count: int = 0
+    pending_followups_count: int = 0
+
+class CRMFollowupCreate(BaseModel):
+    responder_id: str
+    due_date: str  # YYYY-MM-DD
+    due_time: Optional[str] = "09:00"
+    type: str = Field(default="email")
+    notes: Optional[str] = ""
+    assigned_to: Optional[str] = None
+
+class CRMFollowupUpdate(BaseModel):
+    due_date: Optional[str] = None
+    due_time: Optional[str] = None
+    type: Optional[str] = None
+    notes: Optional[str] = None
+    assigned_to: Optional[str] = None
+    status: Optional[str] = None
+    outcome: Optional[str] = None
+
+class CRMFollowupResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    responder_id: str
+    responder_name: Optional[str] = None
+    responder_company: Optional[str] = None
+    due_date: str
+    due_time: str
+    type: str
+    notes: str
+    assigned_to: Optional[str] = None
+    assigned_to_name: Optional[str] = None
+    status: str
+    outcome: str
+    completed_at: Optional[str] = None
+    completed_by: Optional[str] = None
+    created_by: str
+    created_at: str
+
+class CRMNoteCreate(BaseModel):
+    responder_id: str
+    content: str
+
+class CRMActivityResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    responder_id: str
+    type: str
+    content: str
+    actor_id: str
+    actor_name: Optional[str] = None
+    created_at: str
+
 # ============== AUTH HELPERS ==============
 
 def hash_password(password: str) -> str:
@@ -1229,6 +1345,427 @@ async def get_overview_stats(user: dict = Depends(get_current_user)):
         "sent_tasks": sent_tasks,
         "replied": replied
     }
+
+# ============== LIBERTY CAD CRM ENDPOINTS ==============
+
+async def _user_name_map(user_ids: List[str]) -> Dict[str, str]:
+    if not user_ids:
+        return {}
+    users = await db.users.find(
+        {"id": {"$in": list(set(user_ids))}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(1000)
+    return {u["id"]: u.get("name") or u.get("email", "") for u in users}
+
+async def _enrich_responder(r: dict, name_map: Optional[Dict[str, str]] = None) -> dict:
+    if name_map is None:
+        ids = [x for x in [r.get("owner_id"), r.get("created_by")] if x]
+        name_map = await _user_name_map(ids)
+    r["owner_name"] = name_map.get(r.get("owner_id"), None) if r.get("owner_id") else None
+    r["created_by_name"] = name_map.get(r.get("created_by"), None) if r.get("created_by") else None
+
+    # followups stats
+    pending = await db.crm_followups.find(
+        {"responder_id": r["id"], "status": "pending"},
+        {"_id": 0, "due_date": 1, "due_time": 1}
+    ).sort([("due_date", 1), ("due_time", 1)]).to_list(1000)
+    total = await db.crm_followups.count_documents({"responder_id": r["id"]})
+    r["followups_count"] = total
+    r["pending_followups_count"] = len(pending)
+    r["next_followup_at"] = (
+        f"{pending[0]['due_date']} {pending[0].get('due_time', '')}".strip()
+        if pending else None
+    )
+
+    last_done = await db.crm_followups.find_one(
+        {"responder_id": r["id"], "status": "done"},
+        {"_id": 0, "completed_at": 1},
+        sort=[("completed_at", -1)]
+    )
+    r["last_followup_at"] = last_done.get("completed_at") if last_done else None
+
+    # defaults for older docs
+    for k in ["email", "company", "title", "phone", "linkedin", "campaign_name",
+              "response_date", "response_summary"]:
+        r.setdefault(k, "")
+    r.setdefault("tags", [])
+    return r
+
+async def _log_crm_activity(responder_id: str, type_: str, content: str, actor: dict):
+    await db.crm_activity.insert_one({
+        "id": str(uuid.uuid4()),
+        "responder_id": responder_id,
+        "type": type_,
+        "content": content,
+        "actor_id": actor["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+@api_router.post("/crm/responders", response_model=ResponderResponse)
+async def crm_create_responder(req: ResponderCreate, user: dict = Depends(get_current_user)):
+    if req.source not in CRM_SOURCES:
+        raise HTTPException(status_code=400, detail=f"Invalid source. Must be one of: {sorted(CRM_SOURCES)}")
+    if req.status not in CRM_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {sorted(CRM_STATUSES)}")
+
+    if req.owner_id:
+        owner = await db.users.find_one({"id": req.owner_id})
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "full_name": req.full_name.strip(),
+        "email": (req.email or "").strip(),
+        "company": (req.company or "").strip(),
+        "title": (req.title or "").strip(),
+        "phone": (req.phone or "").strip(),
+        "linkedin": (req.linkedin or "").strip(),
+        "source": req.source,
+        "campaign_name": (req.campaign_name or "").strip(),
+        "response_date": req.response_date or "",
+        "response_summary": req.response_summary or "",
+        "status": req.status,
+        "owner_id": req.owner_id,
+        "tags": req.tags or [],
+        "created_by": user["id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.crm_responders.insert_one(doc)
+    await _log_crm_activity(doc["id"], "created", f"Responder added (source: {doc['source']})", user)
+    enriched = await _enrich_responder({**doc})
+    return ResponderResponse(**enriched)
+
+@api_router.get("/crm/responders", response_model=List[ResponderResponse])
+async def crm_list_responders(
+    status: Optional[str] = None,
+    source: Optional[str] = None,
+    owner_id: Optional[str] = None,
+    search: Optional[str] = None,
+    user: dict = Depends(get_current_user),
+):
+    query = {}
+    if status:
+        query["status"] = status
+    if source:
+        query["source"] = source
+    if owner_id:
+        query["owner_id"] = owner_id
+    if search:
+        regex = {"$regex": search, "$options": "i"}
+        query["$or"] = [
+            {"full_name": regex},
+            {"email": regex},
+            {"company": regex},
+            {"campaign_name": regex},
+        ]
+
+    rows = await db.crm_responders.find(query, {"_id": 0}).sort("updated_at", -1).to_list(10000)
+
+    ids = []
+    for r in rows:
+        if r.get("owner_id"):
+            ids.append(r["owner_id"])
+        if r.get("created_by"):
+            ids.append(r["created_by"])
+    name_map = await _user_name_map(ids)
+
+    enriched = [await _enrich_responder(r, name_map) for r in rows]
+    return [ResponderResponse(**r) for r in enriched]
+
+@api_router.get("/crm/responders/{responder_id}", response_model=ResponderResponse)
+async def crm_get_responder(responder_id: str, user: dict = Depends(get_current_user)):
+    r = await db.crm_responders.find_one({"id": responder_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(status_code=404, detail="Responder not found")
+    enriched = await _enrich_responder(r)
+    return ResponderResponse(**enriched)
+
+@api_router.put("/crm/responders/{responder_id}", response_model=ResponderResponse)
+async def crm_update_responder(responder_id: str, req: ResponderUpdate, user: dict = Depends(get_current_user)):
+    existing = await db.crm_responders.find_one({"id": responder_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Responder not found")
+
+    update = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None}
+
+    if "source" in update and update["source"] not in CRM_SOURCES:
+        raise HTTPException(status_code=400, detail=f"Invalid source. Must be one of: {sorted(CRM_SOURCES)}")
+    if "status" in update and update["status"] not in CRM_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {sorted(CRM_STATUSES)}")
+
+    if "owner_id" in update and update["owner_id"]:
+        owner = await db.users.find_one({"id": update["owner_id"]})
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.crm_responders.update_one({"id": responder_id}, {"$set": update})
+
+    # Activity logs for meaningful changes
+    if "status" in update and update["status"] != existing.get("status"):
+        await _log_crm_activity(
+            responder_id, "status_change",
+            f"Status changed from '{existing.get('status', '?')}' to '{update['status']}'",
+            user
+        )
+    if "owner_id" in update and update["owner_id"] != existing.get("owner_id"):
+        new_name = "(unassigned)"
+        if update["owner_id"]:
+            owner_user = await db.users.find_one({"id": update["owner_id"]}, {"_id": 0, "name": 1, "email": 1})
+            if owner_user:
+                new_name = owner_user.get("name") or owner_user.get("email", "")
+        await _log_crm_activity(responder_id, "owner_changed", f"Owner set to {new_name}", user)
+
+    refreshed = await db.crm_responders.find_one({"id": responder_id}, {"_id": 0})
+    enriched = await _enrich_responder(refreshed)
+    return ResponderResponse(**enriched)
+
+@api_router.delete("/crm/responders/{responder_id}")
+async def crm_delete_responder(responder_id: str, admin: dict = Depends(require_admin)):
+    result = await db.crm_responders.delete_one({"id": responder_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Responder not found")
+    await db.crm_followups.delete_many({"responder_id": responder_id})
+    await db.crm_activity.delete_many({"responder_id": responder_id})
+    return {"message": "Responder deleted"}
+
+# ---- Followups ----
+
+@api_router.post("/crm/followups", response_model=CRMFollowupResponse)
+async def crm_create_followup(req: CRMFollowupCreate, user: dict = Depends(get_current_user)):
+    responder = await db.crm_responders.find_one({"id": req.responder_id}, {"_id": 0})
+    if not responder:
+        raise HTTPException(status_code=404, detail="Responder not found")
+    if req.type not in FOLLOWUP_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid type. Must be one of: {sorted(FOLLOWUP_TYPES)}")
+
+    if req.assigned_to:
+        u = await db.users.find_one({"id": req.assigned_to})
+        if not u:
+            raise HTTPException(status_code=404, detail="Assignee not found")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "responder_id": req.responder_id,
+        "due_date": req.due_date,
+        "due_time": req.due_time or "09:00",
+        "type": req.type,
+        "notes": req.notes or "",
+        "assigned_to": req.assigned_to,
+        "status": "pending",
+        "outcome": "",
+        "completed_at": None,
+        "completed_by": None,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.crm_followups.insert_one(doc)
+    await db.crm_responders.update_one(
+        {"id": req.responder_id},
+        {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    await _log_crm_activity(
+        req.responder_id, "followup_scheduled",
+        f"{doc['type'].capitalize()} follow-up scheduled for {doc['due_date']} {doc['due_time']}",
+        user
+    )
+
+    name_map = await _user_name_map([doc["assigned_to"]] if doc["assigned_to"] else [])
+    out = {**doc, "responder_name": responder.get("full_name", ""), "responder_company": responder.get("company", "")}
+    out["assigned_to_name"] = name_map.get(doc["assigned_to"]) if doc["assigned_to"] else None
+    return CRMFollowupResponse(**out)
+
+@api_router.get("/crm/followups", response_model=List[CRMFollowupResponse])
+async def crm_list_followups(
+    range_: Optional[str] = None,  # today | overdue | week | upcoming
+    status: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    responder_id: Optional[str] = None,
+    user: dict = Depends(get_current_user),
+):
+    from datetime import timedelta
+    query = {}
+    if status:
+        query["status"] = status
+    if assigned_to:
+        query["assigned_to"] = assigned_to
+    if responder_id:
+        query["responder_id"] = responder_id
+
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if range_ == "today":
+        query["due_date"] = today_str
+        query.setdefault("status", "pending")
+    elif range_ == "overdue":
+        query["due_date"] = {"$lt": today_str}
+        query["status"] = "pending"
+    elif range_ == "week":
+        week_end = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d")
+        query["due_date"] = {"$gte": today_str, "$lte": week_end}
+        query.setdefault("status", "pending")
+    elif range_ == "upcoming":
+        query["due_date"] = {"$gte": today_str}
+        query.setdefault("status", "pending")
+
+    rows = await db.crm_followups.find(query, {"_id": 0}).sort([("due_date", 1), ("due_time", 1)]).to_list(10000)
+
+    responder_ids = list({r["responder_id"] for r in rows})
+    user_ids = list({r["assigned_to"] for r in rows if r.get("assigned_to")})
+    responders = {
+        r["id"]: r for r in await db.crm_responders.find(
+            {"id": {"$in": responder_ids}}, {"_id": 0, "id": 1, "full_name": 1, "company": 1}
+        ).to_list(10000)
+    }
+    name_map = await _user_name_map(user_ids)
+
+    out = []
+    for r in rows:
+        resp = responders.get(r["responder_id"], {})
+        out.append({
+            **r,
+            "responder_name": resp.get("full_name", ""),
+            "responder_company": resp.get("company", ""),
+            "assigned_to_name": name_map.get(r.get("assigned_to")) if r.get("assigned_to") else None,
+        })
+    return [CRMFollowupResponse(**x) for x in out]
+
+@api_router.put("/crm/followups/{followup_id}", response_model=CRMFollowupResponse)
+async def crm_update_followup(followup_id: str, req: CRMFollowupUpdate, user: dict = Depends(get_current_user)):
+    existing = await db.crm_followups.find_one({"id": followup_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+
+    update = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None}
+
+    if "type" in update and update["type"] not in FOLLOWUP_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid type. Must be one of: {sorted(FOLLOWUP_TYPES)}")
+    if "status" in update and update["status"] not in FOLLOWUP_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {sorted(FOLLOWUP_STATUSES)}")
+
+    if update.get("status") == "done" and existing.get("status") != "done":
+        update["completed_at"] = datetime.now(timezone.utc).isoformat()
+        update["completed_by"] = user["id"]
+
+    await db.crm_followups.update_one({"id": followup_id}, {"$set": update})
+
+    if update.get("status") == "done" and existing.get("status") != "done":
+        outcome = update.get("outcome") or existing.get("outcome") or ""
+        msg = f"{existing.get('type', 'follow-up').capitalize()} completed"
+        if outcome:
+            msg += f": {outcome}"
+        await _log_crm_activity(existing["responder_id"], "followup_completed", msg, user)
+    elif update.get("status") == "skipped":
+        await _log_crm_activity(existing["responder_id"], "followup_skipped",
+                                f"{existing.get('type', 'follow-up').capitalize()} skipped", user)
+    elif "due_date" in update or "due_time" in update:
+        new_date = update.get("due_date", existing["due_date"])
+        new_time = update.get("due_time", existing.get("due_time", ""))
+        await _log_crm_activity(existing["responder_id"], "followup_rescheduled",
+                                f"Follow-up rescheduled to {new_date} {new_time}", user)
+
+    await db.crm_responders.update_one(
+        {"id": existing["responder_id"]},
+        {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    refreshed = await db.crm_followups.find_one({"id": followup_id}, {"_id": 0})
+    responder = await db.crm_responders.find_one({"id": refreshed["responder_id"]}, {"_id": 0})
+    name_map = await _user_name_map([refreshed["assigned_to"]] if refreshed.get("assigned_to") else [])
+    out = {
+        **refreshed,
+        "responder_name": responder.get("full_name", "") if responder else "",
+        "responder_company": responder.get("company", "") if responder else "",
+        "assigned_to_name": name_map.get(refreshed.get("assigned_to")) if refreshed.get("assigned_to") else None,
+    }
+    return CRMFollowupResponse(**out)
+
+@api_router.delete("/crm/followups/{followup_id}")
+async def crm_delete_followup(followup_id: str, user: dict = Depends(get_current_user)):
+    existing = await db.crm_followups.find_one({"id": followup_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    await db.crm_followups.delete_one({"id": followup_id})
+    await _log_crm_activity(existing["responder_id"], "followup_deleted",
+                            f"{existing.get('type', 'follow-up').capitalize()} follow-up removed", user)
+    return {"message": "Follow-up deleted"}
+
+# ---- Notes / Activity ----
+
+@api_router.post("/crm/notes", response_model=CRMActivityResponse)
+async def crm_create_note(req: CRMNoteCreate, user: dict = Depends(get_current_user)):
+    responder = await db.crm_responders.find_one({"id": req.responder_id})
+    if not responder:
+        raise HTTPException(status_code=404, detail="Responder not found")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "responder_id": req.responder_id,
+        "type": "note",
+        "content": req.content,
+        "actor_id": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.crm_activity.insert_one(doc)
+    await db.crm_responders.update_one(
+        {"id": req.responder_id},
+        {"$set": {"updated_at": doc["created_at"]}}
+    )
+    return CRMActivityResponse(**{**doc, "actor_name": user.get("name") or user.get("email", "")})
+
+@api_router.get("/crm/responders/{responder_id}/activity", response_model=List[CRMActivityResponse])
+async def crm_get_activity(responder_id: str, user: dict = Depends(get_current_user)):
+    rows = await db.crm_activity.find({"responder_id": responder_id}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    name_map = await _user_name_map([r["actor_id"] for r in rows])
+    return [CRMActivityResponse(**{**r, "actor_name": name_map.get(r["actor_id"])}) for r in rows]
+
+# ---- Stats ----
+
+@api_router.get("/crm/stats")
+async def crm_stats(user: dict = Depends(get_current_user)):
+    from datetime import timedelta
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    total = await db.crm_responders.count_documents({})
+    by_status = {}
+    for s in CRM_STATUSES:
+        by_status[s] = await db.crm_responders.count_documents({"status": s})
+
+    by_source = {}
+    for s in CRM_SOURCES:
+        by_source[s] = await db.crm_responders.count_documents({"source": s})
+
+    today_followups = await db.crm_followups.count_documents({"due_date": today_str, "status": "pending"})
+    overdue_followups = await db.crm_followups.count_documents({"due_date": {"$lt": today_str}, "status": "pending"})
+    week_end = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d")
+    week_followups = await db.crm_followups.count_documents({
+        "due_date": {"$gte": today_str, "$lte": week_end}, "status": "pending"
+    })
+
+    won = by_status.get("won", 0)
+    closed = won + by_status.get("lost", 0)
+    win_rate = round((won / closed) * 100) if closed else 0
+
+    return {
+        "total_responders": total,
+        "by_status": by_status,
+        "by_source": by_source,
+        "followups_today": today_followups,
+        "followups_overdue": overdue_followups,
+        "followups_this_week": week_followups,
+        "win_rate": win_rate,
+    }
+
+@api_router.get("/crm/team")
+async def crm_team(user: dict = Depends(get_current_user)):
+    """Active users available as owners/assignees for CRM."""
+    users = await db.users.find(
+        {"status": "active", "role": {"$in": ["seat", "admin", "super_admin"]}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}
+    ).sort("name", 1).to_list(1000)
+    return users
 
 # ============== HEALTH CHECK ==============
 
