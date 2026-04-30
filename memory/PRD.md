@@ -105,3 +105,29 @@ Develop "ABM Blinder," an internal application for managed outbound campaigns wi
 - [ ] Email integration (optional)
 - [ ] Analytics dashboard with charts
 - [ ] Seat performance metrics
+
+## Liberty CAD CRM Module (Apr 2026)
+
+A standalone CRM for tracking people who responded to Liberty CAD's Smartlead and HeyReach campaigns and managing recurring team follow-ups.
+
+### Data Model
+- **Responder** — full_name, email, company, title, phone, linkedin, source (smartlead/heyreach/linkedin/referral/other), campaign_name, response_date, response_summary, status (new/contacted/nurturing/qualified/meeting_booked/won/lost/unresponsive), owner_id, tags
+- **CRMFollowup** — responder_id, due_date, due_time, type (email/call/linkedin/meeting/other), notes, assigned_to, status (pending/done/skipped), outcome, completed_at
+- **CRMActivity** — responder_id, type (note/status_change/owner_changed/followup_*), content, actor_id, created_at
+
+### Backend (`/api/crm/*`)
+- `responders` CRUD with filters (status/source/owner/search)
+- `followups` CRUD with range filters (today/overdue/week/upcoming) and assignee filter
+- `notes` and combined `activity` log per responder
+- `stats` (counts by status/source, today/overdue/week followup counts, win rate)
+- `team` (active users available as owners/assignees)
+- All seats + admins can view/edit. Only admins can delete responders.
+
+### Frontend (`/crm/*`)
+- **CRM Dashboard** — stat cards, today's follow-ups (one-click Done), overdue list, recent responders
+- **Responders** — list with search + status/source/owner filters, full Add Responder form
+- **Responder Detail** — contact card with inline status/owner update, follow-ups column (schedule/complete/skip with outcome), activity feed with notes
+- **Follow-ups** — Today / Overdue / Next 7 Days / All Upcoming tabs, grouped by date, complete/skip inline
+
+### Navigation
+- Sidebar shows a "Liberty CAD CRM" section under the existing nav for all roles.

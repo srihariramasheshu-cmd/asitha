@@ -1,10 +1,10 @@
 import { useAuth } from "@/App";
 import { useLocation, useNavigate } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  FolderKanban, 
-  Users, 
-  Target, 
+import {
+  LayoutDashboard,
+  FolderKanban,
+  Users,
+  Target,
   CalendarClock,
   Upload,
   Download,
@@ -15,7 +15,10 @@ import {
   Crown,
   ListTodo,
   Zap,
-  Calendar
+  Calendar,
+  Inbox,
+  Repeat,
+  Building2
 } from "lucide-react";
 
 export const Sidebar = () => {
@@ -45,6 +48,12 @@ export const Sidebar = () => {
     { path: "/projects", icon: FolderKanban, label: "My Projects" },
     { path: "/prospects", icon: Target, label: "My Prospects" },
     { path: "/tasks", icon: CalendarClock, label: "My Tasks" },
+  ];
+
+  const crmNavItems = [
+    { path: "/crm", icon: Building2, label: "CRM Dashboard" },
+    { path: "/crm/responders", icon: Inbox, label: "Responders" },
+    { path: "/crm/followups", icon: Repeat, label: "Follow-ups" },
   ];
 
   const navItems = ["admin", "super_admin"].includes(user?.role) ? adminNavItems : seatNavItems;
@@ -88,6 +97,33 @@ export const Sidebar = () => {
               )}
             </button>
           ))}
+        </div>
+
+        {/* Liberty CAD CRM section */}
+        <div className="mt-6 px-3">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-600 px-3 mb-2">
+            Liberty CAD CRM
+          </p>
+          <div className="space-y-1">
+            {crmNavItems.map((item) => (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                data-testid={`nav-${item.label.toLowerCase().replace(/\s/g, '-')}`}
+                className={`nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-manrope ${
+                  isActive(item.path)
+                    ? "active bg-zinc-800 text-white border-l-2 border-emerald-500"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                <item.icon size={18} strokeWidth={1.5} />
+                <span>{item.label}</span>
+                {isActive(item.path) && (
+                  <ChevronRight size={14} className="ml-auto text-zinc-500" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </nav>
 

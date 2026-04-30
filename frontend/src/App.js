@@ -20,6 +20,10 @@ import ScheduleLever from "@/pages/ScheduleLever";
 import TasksPage from "@/pages/TasksPage";
 import ScheduleUploadPage from "@/pages/ScheduleUploadPage";
 import ExportPage from "@/pages/ExportPage";
+import CRMDashboard from "@/pages/CRMDashboard";
+import RespondersPage from "@/pages/RespondersPage";
+import ResponderDetailPage from "@/pages/ResponderDetailPage";
+import FollowupsPage from "@/pages/FollowupsPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -213,7 +217,29 @@ function AppRoutes() {
           <TasksPage />
         </ProtectedRoute>
       } />
-      
+
+      {/* Liberty CAD CRM */}
+      <Route path="/crm" element={
+        <ProtectedRoute>
+          <CRMDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/crm/responders" element={
+        <ProtectedRoute>
+          <RespondersPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/crm/responders/:responderId" element={
+        <ProtectedRoute>
+          <ResponderDetailPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/crm/followups" element={
+        <ProtectedRoute>
+          <FollowupsPage />
+        </ProtectedRoute>
+      } />
+
       {/* Default redirects */}
       <Route path="/" element={<RootRedirect />} />
       <Route path="*" element={<Navigate to="/" replace />} />
